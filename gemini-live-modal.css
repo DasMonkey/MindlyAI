@@ -1,0 +1,305 @@
+/* Gemini Live Modal Styles */
+#mindy-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999999;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+#mindy-modal {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 24px;
+  padding: 0;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from { 
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.mindy-header {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mindy-header h2 {
+  margin: 0;
+  color: white;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.mindy-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  line-height: 1;
+  padding: 0;
+}
+
+.mindy-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.mindy-status {
+  padding: 32px 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mindy-status-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mindy-pulse {
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  position: relative;
+}
+
+.mindy-pulse::before,
+.mindy-pulse::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  animation: pulse 2s ease-out infinite;
+}
+
+.mindy-pulse::after {
+  animation-delay: 1s;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+.mindy-status.listening .mindy-pulse {
+  background: #4ade80;
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+.mindy-status.speaking .mindy-pulse {
+  background: #f59e0b;
+  animation: glow 1s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+  }
+  50% { 
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.8);
+  }
+}
+
+#mindy-status-text {
+  color: white;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.mindy-transcript {
+  padding: 24px;
+  background: white;
+  max-height: 300px;
+  overflow-y: auto;
+  min-height: 150px;
+}
+
+#mindy-transcript-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mindy-info {
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+  margin: 40px 0;
+}
+
+.mindy-message {
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 85%;
+  word-wrap: break-word;
+  animation: messageSlide 0.3s ease;
+}
+
+@keyframes messageSlide {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mindy-message.user {
+  background: #e0e7ff;
+  color: #3730a3;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.mindy-message.ai {
+  background: #f3f4f6;
+  color: #1f2937;
+  align-self: flex-start;
+}
+
+.mindy-message-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+
+.mindy-message-text {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.mindy-controls {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mindy-control-btn {
+  flex: 1;
+  padding: 14px 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mindy-control-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.mindy-control-btn:active {
+  transform: translateY(0);
+}
+
+.mindy-control-btn.muted {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.mindy-end-btn {
+  background: rgba(239, 68, 68, 0.8);
+  border-color: rgba(239, 68, 68, 1);
+}
+
+.mindy-end-btn:hover {
+  background: rgba(220, 38, 38, 0.9);
+}
+
+.mindy-footer {
+  padding: 12px 24px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.mindy-footer small {
+  font-size: 12px;
+}
+
+/* Scrollbar styling */
+.mindy-transcript::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mindy-transcript::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.mindy-transcript::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.mindy-transcript::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}

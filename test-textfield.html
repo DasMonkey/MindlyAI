@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Field Assistant Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #555;
+    }
+    textarea, input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .contenteditable {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+    }
+    .contenteditable:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+    .info {
+      background: #e3f2fd;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 20px;
+      border-left: 4px solid #2196f3;
+    }
+    .sample-text {
+      font-size: 12px;
+      color: #888;
+      font-style: italic;
+      margin-top: 4px;
+    }
+    .test-buttons {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover {
+      background: #4f46e5;
+    }
+  </style>
+</head>
+<body>
+  <h1>✨ Text Field Assistant Test Page</h1>
+  
+  <div class="info">
+    <strong>How to test:</strong>
+    <ol>
+      <li>Make sure the extension is loaded and API key is configured</li>
+      <li>Click in any text field below</li>
+      <li>Look for the purple sparkle icon (✨) in bottom-right corner</li>
+      <li>Click the icon to open the toolbar</li>
+      <li>Try the "Fix" or "Formal" buttons</li>
+      <li>Check browser console (F12) for debug logs</li>
+    </ol>
+  </div>
+
+  <div class="test-section">
+    <label>Test 1: Textarea with Grammar Errors</label>
+    <textarea id="test1" placeholder="Type or paste text here...">Me and him went to the store yesterday and bought some apple's. We was very happy with the purchase.</textarea>
+    <div class="sample-text">Expected: Grammar errors should be fixed</div>
+  </div>
+
+  <div class="test-section">
+    <label>Test 2: Input Field - Casual to Formal</label>
+    <input type="text" id="test2" value="hey can u help me with this asap" placeholder="Type here...">
+    <div class="sample-text">Expected: Converted to formal tone</div>
+  </div>
+
+  <div class="test-section">
+    <label>Test 3: Email Input</label>
+    <input type="email" id="test3" placeholder="email@example.com">
+    <div class="sample-text">Type some text to test</div>
+  </div>
+
+  <div class="test-section">
+    <label>Test 4: Contenteditable Div</label>
+    <div class="contenteditable" contenteditable="true">This is a contenteditable div. You can edit this text and test the AI assistant on it!</div>
+    <div class="sample-text">Expected: Works same as textarea</div>
+  </div>
+
+  <div class="test-section">
+    <label>Test 5: Long Text - Make Shorter</label>
+    <textarea id="test5">I wanted to reach out to you to see if you might possibly be available for a meeting sometime next week to discuss the various aspects of the project that we have been working on together over the past several months.</textarea>
+    <div class="sample-text">Expected: Condensed version</div>
+  </div>
+
+  <div class="test-section">
+    <label>Test 6: Multiple Fields</label>
+    <input type="text" value="Field A" style="margin-bottom: 10px;">
+    <input type="text" value="Field B" style="margin-bottom: 10px;">
+    <input type="text" value="Field C">
+    <div class="sample-text">Expected: Icon appears on each field individually</div>
+  </div>
+
+  <div class="test-buttons">
+    <button onclick="window.location.reload()">🔄 Reload Page</button>
+    <button onclick="console.clear()">🗑️ Clear Console</button>
+    <button onclick="document.getElementById('test1').focus()">👆 Focus Test 1</button>
+  </div>
+
+  <script>
+    // Add some logging to help debug
+    console.log('✅ Test page loaded');
+    console.log('📋 Text fields detected:', document.querySelectorAll('textarea, input[type="text"], input[type="email"], [contenteditable="true"]').length);
+    
+    // Log when fields are focused
+    document.querySelectorAll('textarea, input, [contenteditable="true"]').forEach((field, index) => {
+      field.addEventListener('focus', () => {
+        console.log(`🎯 Field ${index + 1} focused`);
+      });
+    });
+
+    // Check if extension script loaded
+    setTimeout(() => {
+      if (window.textFieldAssistant) {
+        console.log('✅ Text Field Assistant loaded successfully');
+        console.log('📊 Attached fields:', window.textFieldAssistant.attachedFields);
+      } else {
+        console.error('❌ Text Field Assistant NOT loaded - check extension');
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

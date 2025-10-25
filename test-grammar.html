@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grammar Checker Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    
+    .test-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .test-section h3 {
+      margin-top: 0;
+      color: #667eea;
+    }
+    
+    textarea, input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 16px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 100px;
+    }
+    
+    textarea:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .instructions {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin-bottom: 30px;
+      border-radius: 4px;
+    }
+    
+    .instructions h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+    
+    .instructions ol {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    
+    .debug-section {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 15px;
+      margin-top: 30px;
+      border-radius: 4px;
+    }
+    
+    .debug-section h3 {
+      margin-top: 0;
+    }
+    
+    #console-output {
+      background: #263238;
+      color: #aed581;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin-right: 10px;
+    }
+    
+    button:hover {
+      background: #5568d3;
+    }
+  </style>
+</head>
+<body>
+  <h1>📝 Grammar Checker Test Page</h1>
+  
+  <div class="instructions">
+    <h2>🧪 Testing Instructions:</h2>
+    <ol>
+      <li><strong>Type text with errors</strong> in any text field below</li>
+      <li><strong>Wait 1 second</strong> after stopping typing (debounced)</li>
+      <li><strong>Look for red dotted underlines</strong> beneath errors</li>
+      <li><strong>Hover over underlines</strong> to see suggestions</li>
+      <li><strong>Click "Apply"</strong> to fix the error</li>
+    </ol>
+    <p><strong>Note:</strong> Make sure the Chrome extension is loaded and active!</p>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 1: Spelling Errors</h3>
+    <textarea id="test1" placeholder="Try typing: 'I recieved the packege yesterday'">I recieved the packege yesterday</textarea>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 2: Grammar Errors</h3>
+    <textarea id="test2" placeholder="Try typing: 'He dont know nothing about it'">He dont know nothing about it</textarea>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 3: Multiple Errors</h3>
+    <textarea id="test3" placeholder="Try typing text with multiple errors...">teh qick brown fox jumpped over teh lazy dog</textarea>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 4: Single Line Input</h3>
+    <input type="text" id="test4" value="This is a testting of the grammer checker" />
+  </div>
+
+  <div class="test-section">
+    <h3>Test 5: ContentEditable</h3>
+    <div contenteditable="true" style="border: 2px solid #ddd; padding: 12px; min-height: 100px; border-radius: 6px;">
+      The studant writed a paper about historry
+    </div>
+  </div>
+
+  <div class="debug-section">
+    <h3>🐛 Debug Console</h3>
+    <button onclick="checkExtensionStatus()">Check Extension Status</button>
+    <button onclick="clearConsole()">Clear Console</button>
+    <button onclick="location.reload()">Reload Page</button>
+    <div id="console-output">Loading...</div>
+  </div>
+
+  <script>
+    const output = document.getElementById('console-output');
+    
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const colors = {
+        info: '#aed581',
+        success: '#81c784',
+        error: '#ef5350',
+        warning: '#ffb74d'
+      };
+      output.innerHTML += `<span style="color: ${colors[type]}">[${timestamp}] ${message}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+    
+    function clearConsole() {
+      output.innerHTML = '';
+      log('Console cleared', 'info');
+    }
+    
+    function checkExtensionStatus() {
+      log('🔍 Checking extension status...', 'info');
+      
+      // Check if grammar checker is loaded
+      if (window.grammarChecker) {
+        log('✅ Grammar Checker: LOADED', 'success');
+        log(`   Attached fields: ${window.grammarChecker.attachedFields ? 'Yes' : 'No'}`, 'info');
+        log(`   Cache size: ${window.grammarChecker.checkCache?.size || 0}`, 'info');
+      } else {
+        log('❌ Grammar Checker: NOT LOADED', 'error');
+      }
+      
+      // Check if text field assistant is loaded
+      if (window.textFieldAssistant) {
+        log('✅ Text Field Assistant: LOADED', 'success');
+      } else {
+        log('⚠️ Text Field Assistant: NOT LOADED', 'warning');
+      }
+      
+      // Count text fields
+      const fields = document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]');
+      log(`📝 Text fields detected: ${fields.length}`, 'info');
+      
+      // Check for overlays
+      const overlays = document.querySelectorAll('.grammar-overlay');
+      log(`🎨 Grammar overlays on page: ${overlays.length}`, 'info');
+      
+      // Check for suggestion popups
+      const popups = document.querySelectorAll('.grammar-suggestion-popup');
+      log(`💬 Suggestion popups on page: ${popups.length}`, 'info');
+    }
+    
+    // Initial load
+    window.addEventListener('load', () => {
+      log('✅ Test page loaded', 'success');
+      log('⏳ Waiting for extension to initialize...', 'info');
+      
+      setTimeout(() => {
+        checkExtensionStatus();
+      }, 1500);
+    });
+    
+    // Monitor field focus
+    document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]').forEach((field, index) => {
+      field.addEventListener('focus', () => {
+        log(`🎯 Field ${index + 1} focused`, 'info');
+      });
+      
+      field.addEventListener('input', () => {
+        log(`⌨️ Field ${index + 1} input detected (checking in 1s...)`, 'info');
+      });
+    });
+    
+    // Intercept console logs
+    const originalLog = console.log;
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      log(args.join(' '), 'info');
+    };
+    
+    const originalError = console.error;
+    console.error = function(...args) {
+      originalError.apply(console, args);
+      log('❌ ' + args.join(' '), 'error');
+    };
+  </script>
+</body>
+</html>

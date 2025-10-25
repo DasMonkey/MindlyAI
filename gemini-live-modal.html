@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Call Mindy</title>
+  <link rel="stylesheet" href="gemini-live-modal.css">
+</head>
+<body>
+  <div id="mindy-modal-overlay">
+    <div id="mindy-modal">
+      <div class="mindy-header">
+        <h2>🎤 Call Mindy</h2>
+        <button id="mindy-close" class="mindy-close-btn">&times;</button>
+      </div>
+      
+      <div class="mindy-status">
+        <div class="mindy-status-icon">
+          <div class="mindy-pulse"></div>
+        </div>
+        <p id="mindy-status-text">Connecting...</p>
+      </div>
+      
+      <div class="mindy-transcript">
+        <div id="mindy-transcript-content">
+          <p class="mindy-info">Ask me anything about this page...</p>
+        </div>
+      </div>
+      
+      <div class="mindy-controls">
+        <button id="mindy-mute" class="mindy-control-btn" title="Mute/Unmute">
+          <span class="mindy-btn-icon">🎤</span>
+          <span class="mindy-btn-text">Mute</span>
+        </button>
+        <button id="mindy-end-call" class="mindy-control-btn mindy-end-btn">
+          <span class="mindy-btn-icon">📞</span>
+          <span class="mindy-btn-text">End Call</span>
+        </button>
+      </div>
+      
+      <div class="mindy-footer">
+        <small>Powered by Gemini 2.5 Native Audio</small>
+      </div>
+    </div>
+  </div>
+  
+  <script src="audio-processor.js"></script>
+  <script src="gemini-live-connection.js"></script>
+</body>
+</html>

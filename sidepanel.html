@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Assistant Dashboard</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>✨ AI Assistant</h1>
+      <div class="api-status">
+        <span class="status-indicator" id="apiStatus"></span>
+        <span id="apiStatusText">Not configured</span>
+      </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="main-layout">
+      <!-- Task Tabs (Vertical Sidebar) -->
+      <div class="tabs">
+        <button class="tab active" data-tab="generate" title="Generate">📊</button>
+        <button class="tab" data-tab="chat" title="Chat">💬</button>
+        <button class="tab" data-tab="mindy" title="Call Mindy">🎤</button>
+        <button class="tab" data-tab="clipboard" title="Clipboard">📋</button>
+        <button class="tab" data-tab="bookmarks" title="Bookmarks">🔖</button>
+        <button class="tab" data-tab="history" title="History">📜</button>
+        <button class="tab" data-tab="settings" title="Settings">⚙️</button>
+      </div>
+
+      <!-- Content Area -->
+      <div class="content-area">
+    <!-- Generate Tab -->
+    <div class="tab-content active" id="generateTab">
+      <div class="section">
+        <h2>🎯 Current Task</h2>
+        <div id="currentTask" class="task-display">
+          <p class="placeholder">No active task. Use the floating popup to start!</p>
+        </div>
+      </div>
+
+      <h2 style="font-size: 14px; margin-bottom: 8px; color: #ffffff; padding: 0;">📝 Result</h2>
+      <div id="resultArea" class="result-box">
+        <div class="loading" id="loading" style="display: none;">
+          <div class="spinner"></div>
+          <p>Generating content with AI...</p>
+        </div>
+        <div id="result" class="result-content"></div>
+      </div>
+      <div class="action-buttons" id="actionButtons" style="display: none;">
+        <button id="copyBtn" class="btn btn-secondary">📋 Copy</button>
+        <button id="downloadBtn" class="btn btn-secondary">💾 Download</button>
+        <button id="regenerateBtn" class="btn btn-primary">🔄 Regenerate</button>
+      </div>
+    </div>
+
+    <!-- Chat Tab -->
+    <div class="tab-content chat-fullscreen" id="chatTab">
+      <div class="chat-header">
+        <h2>💬 Chat with Page</h2>
+        <button id="clearChatBtn" class="btn btn-secondary">🗑️ Clear</button>
+      </div>
+      
+      <div id="chatMessages" class="chat-messages">
+        <div class="chat-message ai-message">
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <p>Hello! I'm ready to answer questions about this page. What would you like to know?</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="chat-input-container">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Ask me anything about this page..." />
+        <button id="sendChatBtn" class="btn btn-primary chat-send-btn">➤</button>
+      </div>
+    </div>
+
+    <!-- Call Mindy Tab -->
+    <div class="tab-content mindy-fullscreen" id="mindyTab">
+      <div class="mindy-container">
+        <div class="mindy-header-panel">
+          <h2>🎤 Call Mindy - Voice AI</h2>
+          <div class="mindy-status-panel">
+            <div class="mindy-status-icon-panel">
+              <div class="mindy-pulse-panel"></div>
+            </div>
+            <p id="mindyStatusPanel">Ready to start</p>
+          </div>
+        </div>
+        
+        <div class="mindy-transcript-panel">
+          <div id="mindyTranscriptPanel">
+            <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can answer your questions via voice.</p>
+          </div>
+        </div>
+        
+        <div class="mindy-controls-panel">
+          <button id="mindyStartBtn" class="btn btn-primary">
+            <span>🎤</span> Start Call
+          </button>
+          <button id="mindyMuteBtn" class="btn btn-secondary" style="display:none;">
+            <span id="mindyMuteIcon">🎤</span> <span id="mindyMuteText">Mute</span>
+          </button>
+          <button id="mindyEndBtn" class="btn btn-danger" style="display:none;">
+            <span>📞</span> End Call
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clipboard Tab -->
+    <div class="tab-content clipboard-fullscreen" id="clipboardTab">
+      <div class="clipboard-header">
+        <h2>📋 Clipboard History</h2>
+        <button id="clearClipboardBtn" class="btn btn-danger">🗑️ Clear All</button>
+      </div>
+      <div id="clipboardList" class="clipboard-list">
+        <p class="placeholder">No clipboard items yet. Copy something to get started!</p>
+      </div>
+    </div>
+
+    <!-- Bookmarks Tab -->
+    <div class="tab-content" id="bookmarksTab">
+      <div class="section">
+        <div class="section-header">
+          <h2>🔖 Saved Bookmarks</h2>
+          <button id="organizeBtn" class="btn btn-secondary">🤖 AI Organize</button>
+        </div>
+        <div id="bookmarksList" class="bookmarks-list">
+          <p class="placeholder">No bookmarks saved yet.</p>
+        </div>
+      </div>
+
+      <div class="section" id="groupsSection" style="display: none;">
+        <h2>📁 AI-Organized Groups</h2>
+        <div id="groupsList" class="groups-list"></div>
+      </div>
+    </div>
+
+    <!-- History Tab -->
+    <div class="tab-content" id="historyTab">
+      <div class="section">
+        <div class="section-header">
+          <h2>📜 History</h2>
+          <button id="clearHistoryBtn" class="btn btn-danger">🗑️ Clear</button>
+        </div>
+        <div id="historyList" class="history-list">
+          <p class="placeholder">No history yet.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-content" id="settingsTab">
+      <div class="section">
+        <h2>🔑 API Key</h2>
+        <div class="input-group">
+          <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
+          <button id="saveApiKey" class="btn btn-primary">Save</button>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link">Get API Key</a>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🌐 Translation Settings</h2>
+        <div class="input-group">
+          <label for="targetLanguage">Preferred Language:</label>
+          <select id="targetLanguage" class="select-input">
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="zh">Chinese</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="ar">Arabic</option>
+            <option value="hi">Hindi</option>
+            <option value="it">Italian</option>
+          </select>
+          <button id="saveLanguage" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🎤 Call Mindy Voice Settings</h2>
+        <div class="input-group">
+          <label for="mindyVoice">Voice:</label>
+          <select id="mindyVoice" class="select-input">
+            <option value="Puck">Puck - Female (Upbeat)</option>
+            <option value="Aoede">Aoede - Female (Breezy)</option>
+            <option value="Charon">Charon - Male (Informative)</option>
+            <option value="Kore">Kore - Female (Firm)</option>
+            <option value="Fenrir">Fenrir - Male (Excitable)</option>
+            <option value="Orbit">Orbit - Male (Firm)</option>
+            <option value="Puck2">Puck 2 - Female (Upbeat, alt)</option>
+            <option value="Charon2">Charon 2 - Male (Informative, alt)</option>
+          </select>
+          <button id="saveMindyVoice" class="btn btn-primary">Save</button>
+          <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">💡 Tip: Try different voices to find your favorite!</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🔊 Text-to-Speech Settings</h2>
+        <div class="input-group">
+          <label for="ttsVoice">Voice:</label>
+          <select id="ttsVoice" class="select-input">
+            <option value="Aoede">Aoede (Breezy)</option>
+            <option value="Puck">Puck (Upbeat)</option>
+            <option value="Kore">Kore (Firm)</option>
+            <option value="Charon">Charon (Informative)</option>
+            <option value="Fenrir">Fenrir (Excitable)</option>
+            <option value="Leda">Leda (Youthful)</option>
+            <option value="Orus">Orus (Firm)</option>
+            <option value="Callirrhoe">Callirrhoe (Easy-going)</option>
+            <option value="Autonoe">Autonoe (Bright)</option>
+            <option value="Enceladus">Enceladus (Breathy)</option>
+            <option value="Iapetus">Iapetus (Clear)</option>
+            <option value="Umbriel">Umbriel (Easy-going)</option>
+            <option value="Algieba">Algieba (Smooth)</option>
+            <option value="Despina">Despina (Smooth)</option>
+            <option value="Erinome">Erinome (Clear)</option>
+          </select>
+          <label for="ttsMaxChars">Max Characters:</label>
+          <input type="number" id="ttsMaxChars" placeholder="1000" min="100" max="5000" value="1000">
+          <label for="ttsSpeechSpeed">Speech Speed:</label>
+          <div class="slider-container">
+            <input type="range" id="ttsSpeechSpeed" class="slider" min="0.5" max="2.0" step="0.1" value="1.0">
+            <span id="ttsSpeechSpeedValue" class="slider-value">1.0x</span>
+          </div>
+          <button id="saveTTSSettings" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>ℹ️ About</h2>
+        <div class="about-info">
+          <p><strong>Version:</strong> 1.0.0</p>
+          <p><strong>Model:</strong> Gemini 2.0 Flash</p>
+          <p><a href="https://github.com" target="_blank" class="link">Documentation</a></p>
+        </div>
+      </div>
+    </div>
+      </div> <!-- Close content-area -->
+    </div> <!-- Close main-layout -->
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
