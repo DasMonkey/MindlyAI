@@ -24,7 +24,7 @@ body {
 
 .header {
   flex-shrink: 0;
-  padding: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   z-index: 10;
@@ -32,8 +32,8 @@ body {
 
 .header h1 {
   font-size: 16px; /* Reduced from 24px */
-  margin-bottom: 6px; /* Reduced from 12px */
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  margin-bottom: 2px; /* Reduced vertical spacing */
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -87,11 +87,20 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 0;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .section-header h2 {
-  margin-bottom: 0;
+  font-size: 14px;
+  margin: 0;
+  color: #ffffff;
 }
 
 .input-group {
@@ -134,7 +143,7 @@ body {
 .input-group input:focus,
 .input-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #f59e0b;
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -170,7 +179,7 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -185,7 +194,7 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   cursor: pointer;
   border: none;
   transition: all 0.2s;
@@ -202,8 +211,8 @@ body {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
 }
@@ -223,7 +232,7 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   color: white;
 }
 
@@ -253,7 +262,7 @@ body {
 }
 
 .link {
-  color: #667eea;
+  color: #f59e0b;
   text-decoration: none;
   font-size: 13px;
   display: inline-block;
@@ -276,7 +285,7 @@ body {
   flex-direction: row;
   gap: 0;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-  padding: 8px 0;
+  padding: 0;
   overflow-x: hidden;
   width: 100%;
   flex-shrink: 0;
@@ -294,6 +303,62 @@ body {
   display: flex;
   flex-direction: column;
   padding: 12px;
+}
+
+/* Remove padding for Chat, Mindy, Clipboard, Bookmarks, and History tabs */
+.content-area:has(#chatTab.active),
+.content-area:has(#mindyTab.active),
+.content-area:has(#clipboardTab.active),
+.content-area:has(#bookmarksTab.active),
+.content-area:has(#historyTab.active) {
+  padding: 0;
+}
+
+/* Remove top rounded corners for first section in Bookmarks and History tabs */
+#bookmarksTab.active .section:first-child,
+#historyTab.active .section:first-child {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+/* Make section background transparent and remove border in Bookmarks tab */
+#bookmarksTab.active .section {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Bookmarks Fullscreen Layout - same as Clipboard */
+#bookmarksTab {
+  display: none;
+}
+
+#bookmarksTab.active {
+  display: flex !important;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 !important;
+}
+
+#bookmarksTab.active .section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+#bookmarksTab.active .section-header {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-bottom: 0;
+}
+
+#bookmarksTab.active .bookmarks-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
 }
 
 .tab {
@@ -329,8 +394,8 @@ body {
 
 .tab.active {
   color: #ffffff;
-  border-bottom-color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
+  border-bottom-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .tab-content {
@@ -399,7 +464,7 @@ body {
 }
 
 .result-content h3 {
-  color: #667eea;
+  color: #f59e0b;
   margin-top: 16px;
   margin-bottom: 8px;
 }
@@ -434,7 +499,7 @@ body {
   width: 40px;
   height: 40px;
   border: 4px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #667eea;
+  border-top-color: #f59e0b;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -453,7 +518,7 @@ body {
 .bookmarks-list, .history-list, .groups-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 /* Bookmark Groups */
@@ -461,7 +526,6 @@ body {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  overflow: hidden;
 }
 
 .bookmark-group-header {
@@ -469,8 +533,22 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(245, 158, 11, 0.1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.bookmark-group-header:hover {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.bookmark-group-toggle {
+  user-select: none;
+  font-size: 12px;
+  min-width: 16px;
+  display: inline-block;
+  transition: transform 0.2s;
 }
 
 .bookmark-favicon {
@@ -481,7 +559,7 @@ body {
 
 .bookmark-domain {
   font-weight: 600;
-  color: #667eea;
+  color: #f59e0b;
   font-size: 14px;
   flex: 1;
 }
@@ -564,7 +642,7 @@ body {
 }
 
 .group-item h3 {
-  color: #667eea;
+  color: #f59e0b;
   font-size: 16px;
   margin-bottom: 12px;
 }
@@ -611,7 +689,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 8px 16px;
   background: rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
@@ -671,7 +749,7 @@ body {
 }
 
 .user-message .message-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
 }
 
 .message-content {
@@ -698,7 +776,7 @@ body {
 .chat-input-container {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 8px 16px;
   background: rgba(255, 255, 255, 0.05);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
@@ -717,9 +795,9 @@ body {
 
 .chat-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #f59e0b;
   background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
 }
 
 .chat-input::placeholder {
@@ -738,6 +816,66 @@ body {
 .chat-send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Chat Refresh Button - New Page Detection */
+.chat-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: calc(100% - 32px);
+  margin: 0 16px 8px 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%);
+  border: 2px solid rgba(245, 158, 11, 0.5);
+  border-radius: 12px;
+  color: #fbbf24;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: pulseGlow 2s infinite;
+  flex-shrink: 0;
+}
+
+.chat-refresh-btn:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(234, 88, 12, 0.3) 100%);
+  border-color: rgba(245, 158, 11, 0.7);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.chat-refresh-btn:active {
+  transform: translateY(0);
+}
+
+.refresh-icon {
+  font-size: 18px;
+  animation: rotate 2s linear infinite;
+}
+
+.refresh-text {
+  flex: 1;
+  text-align: left;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .chat-loading {
@@ -817,14 +955,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: 8px 16px;
   background: rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
 
 .clipboard-header h2 {
-  font-size: 16px;
+  font-size: 14px;
   margin: 0;
   color: #ffffff;
 }
@@ -1062,6 +1200,7 @@ body {
   min-height: 56px;
   font-size: 16px;
   font-weight: 600;
+  border-radius: 24px !important;
 }
 
 /* Make Mute and End Call buttons same height as Start Call */
@@ -1070,11 +1209,12 @@ body {
   min-height: 56px;
   font-size: 16px;
   font-weight: 600;
+  border-radius: 24px !important;
 }
 
 /* PDF Status Banner */
 .pdf-status-banner {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   padding: 12px;
   margin: 0 0 12px 0;
   border-radius: 8px;
@@ -1177,7 +1317,7 @@ body {
 
 .pdf-banner-btn.primary {
   background: rgba(255, 255, 255, 0.9);
-  color: #667eea;
+  color: #f59e0b;
   font-weight: 600;
 }
 
@@ -1212,7 +1352,7 @@ body {
 
 .pdf-mode-option.active {
   background: rgba(255, 255, 255, 0.9);
-  color: #667eea;
+  color: #f59e0b;
   font-weight: 600;
   border-color: white;
 }
@@ -1324,7 +1464,7 @@ body {
 
 .modal-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #f59e0b;
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -1361,9 +1501,9 @@ body {
 
 .pdf-page-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #f59e0b;
   background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
 }
 
 .pdf-page-input::placeholder {

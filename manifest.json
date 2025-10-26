@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "MindlyAI",
+  "name": "Mentelo",
   "version": "1.0.0",
   "description": "AI-powered content assistant with summarization, translation, mindmap, and social media content generation",
   "permissions": [
@@ -19,7 +19,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "AI Assistant",
+    "default_title": "Mentelo",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

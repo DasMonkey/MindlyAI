@@ -71,14 +71,16 @@ class TextFieldAssistant {
 
   setupGlobalListeners() {
     // Close toolbar when clicking outside
-    document.addEventListener('mousedown', (e) => {
+    document.addEventListener('click', (e) => {
+      // Close toolbar when clicking anywhere outside of it
+      // But NOT if clicking on the trigger button (which handles its own toggle)
       if (this.activeToolbar && 
           !this.activeToolbar.element.contains(e.target) &&
           !e.target.closest('.ai-trigger-icon')) {
         this.closeToolbar();
       }
       
-      // Close selection popup when clicking outside (but not on text fields)
+      // Close selection popup when clicking outside (but not on text fields or trigger icon)
       if (this.selectionPopup && 
           !this.selectionPopup.element.contains(e.target) &&
           !e.target.closest('textarea, input, [contenteditable="true"]')) {
@@ -100,7 +102,13 @@ class TextFieldAssistant {
   }
 
   showToolbar(trigger, field) {
-    // Close existing toolbar
+    // Toggle: If toolbar is already open for this trigger, close it
+    if (this.activeToolbar && this.currentTrigger === trigger) {
+      this.closeToolbar();
+      return;
+    }
+    
+    // Close existing toolbar from different trigger
     if (this.activeToolbar) {
       this.closeToolbar();
     }
@@ -108,6 +116,11 @@ class TextFieldAssistant {
     this.currentTrigger = trigger;
     this.activeToolbar = new Toolbar(field, trigger.element);
     this.activeToolbar.show();
+    
+    // Add active class to trigger icon to show it's open
+    if (trigger && trigger.element) {
+      trigger.element.classList.add('active');
+    }
   }
 
 
@@ -116,6 +129,12 @@ class TextFieldAssistant {
       this.activeToolbar.hide();
       this.activeToolbar = null;
     }
+    
+    // Remove active class from trigger icon
+    if (this.currentTrigger && this.currentTrigger.element) {
+      this.currentTrigger.element.classList.remove('active');
+    }
+    
     this.currentTrigger = null;
   }
 
@@ -146,6 +165,7 @@ class SelectionPopup {
     this.selectedText = selection.toString().trim();
     this.savedRange = selection.getRangeAt(0).cloneRange();
     this.services = new AIServices();
+    this.improvedText = null; // Store the improved text result
     this.create();
   }
 
@@ -177,7 +197,14 @@ class SelectionPopup {
     const btn = this.element.querySelector('[data-action="improve"]');
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // Don't close when clicking the toolbar itself
+      e.preventDefault();
       this.showToolbar();
+    });
+    
+    // Prevent clicks inside the toolbar from closing it
+    this.element.addEventListener('click', (e) => {
+      e.stopPropagation();
     });
   }
 
@@ -194,6 +221,13 @@ class SelectionPopup {
         <button class="ai-selection-compact-btn" data-action="translate" title="Translate">🌐</button>
         <button class="ai-selection-compact-btn ai-selection-primary" data-action="ai" title="AI">✨</button>
       </div>
+      <div class="ai-toolbar-result" style="display: none;">
+        <div class="ai-toolbar-result-content"></div>
+        <div class="ai-toolbar-result-actions">
+          <button class="ai-toolbar-result-btn" data-action="apply">Apply</button>
+          <button class="ai-toolbar-result-btn ai-toolbar-result-btn-secondary" data-action="cancel">Cancel</button>
+        </div>
+      </div>
     `;
 
     // Re-center after expanding
@@ -205,6 +239,15 @@ class SelectionPopup {
         e.stopPropagation();
         this.handleAction(btn.dataset.action);
       });
+    });
+
+    // Result actions
+    this.element.querySelector('[data-action="apply"]')?.addEventListener('click', () => {
+      this.applyResult();
+    });
+
+    this.element.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
+      this.hideResult();
     });
   }
 
@@ -225,7 +268,7 @@ class SelectionPopup {
     }
     
     // Show loading state
-    this.showLoadingState(action);
+    this.showLoading(action);
     
     try {
       let result;
@@ -258,36 +301,95 @@ class SelectionPopup {
         throw new Error('AI returned empty response');
       }
 
-      // Replace selected text with result
-      this.replaceSelection(result);
-      this.assistant.hideSelectionPopup();
+      // Show result instead of applying directly
+      this.showResult(result);
     } catch (error) {
       console.error('Selection action error:', error);
-      alert('Failed to process: ' + (error.message || 'Unknown error'));
-      // Restore button state
-      const btn = this.element.querySelector('.loading');
-      if (btn && btn.dataset.originalContent) {
-        btn.innerHTML = btn.dataset.originalContent;
-        btn.classList.remove('loading');
-        btn.disabled = false;
+      this.showError('Failed to process: ' + (error.message || 'Unknown error'));
+    }
+  }
+
+  showLoading(action) {
+    const labels = {
+      fix: 'Fixing...',
+      clear: 'Clarifying...',
+      casual: 'Rewriting...',
+      formal: 'Formalizing...',
+      shorter: 'Condensing...',
+      rephrase: 'Rephrasing...',
+      translate: 'Translating...'
+    };
+
+    const resultDiv = this.element.querySelector('.ai-toolbar-result');
+    const contentDiv = this.element.querySelector('.ai-toolbar-result-content');
+    
+    contentDiv.innerHTML = `
+      <div class="ai-toolbar-loading">
+        <div class="ai-toolbar-spinner"></div>
+        <span>${labels[action] || 'Processing...'}</span>
+      </div>
+    `;
+    
+    resultDiv.style.display = 'block';
+  }
+
+  showResult(text) {
+    const contentDiv = this.element.querySelector('.ai-toolbar-result-content');
+    contentDiv.innerHTML = `
+      <div class="ai-toolbar-comparison">
+        <div class="ai-toolbar-improved">
+          <div class="ai-toolbar-text">${this.escapeHtml(text)}</div>
+        </div>
+      </div>
+    `;
+    
+    this.improvedText = text;
+  }
+
+  showError(message) {
+    const contentDiv = this.element.querySelector('.ai-toolbar-result-content');
+    contentDiv.innerHTML = `
+      <div class="ai-toolbar-error">
+        <span class="ai-toolbar-error-icon">⚠️</span>
+        <span>${message}</span>
+      </div>
+    `;
+    
+    const resultDiv = this.element.querySelector('.ai-toolbar-result');
+    resultDiv.style.display = 'block';
+    
+    setTimeout(() => this.hideResult(), 3000);
+  }
+
+  hideResult() {
+    const resultDiv = this.element.querySelector('.ai-toolbar-result');
+    resultDiv.style.display = 'none';
+    this.improvedText = null;
+  }
+
+  applyResult() {
+    if (this.improvedText) {
+      // Replace selected text with result
+      this.replaceSelection(this.improvedText);
+      this.hideResult();
+      this.assistant.hideSelectionPopup();
+      
+      // Show success feedback
+      const btn = this.element.querySelector('[data-action="apply"]');
+      if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Applied';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 1500);
       }
     }
   }
 
-  showLoadingState(action) {
-    const btn = this.element.querySelector(`[data-action="${action}"]`);
-    if (btn) {
-      btn.disabled = true;
-      btn.classList.add('loading');
-      const originalContent = btn.innerHTML;
-      btn.dataset.originalContent = originalContent;
-      btn.innerHTML = '<div class="ai-selection-spinner"></div>';
-    }
-  }
-
-  hideLoadingState() {
-    // Just close the popup when done
-    this.assistant.hideSelectionPopup();
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   replaceSelection(newText) {
@@ -323,21 +425,53 @@ class SelectionPopup {
 
   positionNearSelection() {
     const range = this.savedRange;
-    const rect = range.getBoundingClientRect();
-    
-    // Position below the selection (using fixed positioning, so no need for scrollY)
-    this.element.style.top = `${rect.bottom + 5}px`;
-    
-    // Center horizontally on the selection
-    const selectionCenter = rect.left + (rect.width / 2);
+    const fieldRect = this.field.getBoundingClientRect();
+
+    // Prefer the last client rect (bottom line) for multi-line selections
+    let baseRect = null;
+    const rectList = range.getClientRects?.();
+    if (rectList && rectList.length > 0) {
+      baseRect = rectList[rectList.length - 1];
+    } else {
+      baseRect = range.getBoundingClientRect();
+    }
+
+    // If selection rect is empty (e.g., inputs/textarea), fall back to field rect
+    if (!baseRect || (baseRect.width === 0 && baseRect.height === 0)) {
+      baseRect = fieldRect;
+    }
+
+    // Base coordinates in the selection's own browsing context (could be inside an iframe)
+    let top = baseRect.bottom + 6;
+    let centerX = baseRect.left + (baseRect.width / 2);
+
+    // If the field lives inside an iframe, translate coordinates to the top-level window
+    const selectionWindow = this.field.ownerDocument?.defaultView;
+    if (selectionWindow && selectionWindow !== window) {
+      const frameEl = selectionWindow.frameElement;
+      if (frameEl) {
+        const frameRect = frameEl.getBoundingClientRect();
+        top += frameRect.top;
+        centerX += frameRect.left;
+      }
+    }
+
+    // Clamp vertically within the field's viewport box so it doesn't drift too far
+    const maxTop = Math.min(fieldRect.bottom - 8, window.innerHeight - 8);
+    const minTop = Math.max(fieldRect.top + 8, 8);
+    top = Math.max(minTop, Math.min(top, maxTop));
+
+    // Apply coordinates (fixed relative to the viewport of top window)
+    this.element.style.top = `${Math.round(top)}px`;
+
     const popupWidth = this.element.offsetWidth || 300;
-    let left = selectionCenter - (popupWidth / 2);
-    
-    // Ensure it stays on screen (using viewport coordinates)
+    let left = Math.round(centerX - (popupWidth / 2));
+
+    // Keep within viewport bounds
     const minLeft = 10;
     const maxLeft = window.innerWidth - popupWidth - 10;
     left = Math.max(minLeft, Math.min(left, maxLeft));
-    
+
     this.element.style.left = `${left}px`;
   }
 
@@ -590,6 +724,11 @@ class Toolbar {
 
     this.element.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
       this.hideResult();
+    });
+    
+    // Prevent clicks inside toolbar from closing it
+    this.element.addEventListener('click', (e) => {
+      e.stopPropagation();
     });
   }
 
@@ -847,10 +986,8 @@ class Toolbar {
 
   hide() {
     this.element.classList.remove('expanded');
-    setTimeout(() => {
-      this.element.classList.remove('visible');
-      this.element.remove();
-    }, 300);
+    this.element.classList.remove('visible');
+    this.element.remove();
   }
 }
 

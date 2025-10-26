@@ -13,15 +13,15 @@
   border-bottom: 2px dotted #FF4444;
   pointer-events: auto;
   cursor: pointer;
-  transition: all 0.2s;
-  /* Debug: add semi-transparent background to see hit area */
-  background: rgba(255, 68, 68, 0.1);
+  transition: all 0.15s ease-in-out;
+  /* Semi-transparent background ensures entire area is hoverable, not just dots */
+  background: rgba(255, 68, 68, 0.08);
 }
 
 .grammar-underline:hover {
   border-bottom-color: #FF0000;
   border-bottom-width: 3px;
-  background: rgba(255, 68, 68, 0.2);
+  background: rgba(255, 68, 68, 0.15);
 }
 
 /* Suggestion Popup */

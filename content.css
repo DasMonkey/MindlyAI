@@ -1,16 +1,20 @@
 /* Floating popup styles */
 #ai-assistant-popup {
-  position: fixed;
-  top: 20px;
+  position: fixed !important;
+  top: 70px;
   right: 20px;
-  width: 160px; /* Fixed width - no more auto-sizing */
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  left: auto;
+  width: 140px; /* Fixed width - more compact */
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.3) 0%, rgba(22, 33, 62, 0.25) 100%) !important;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 999999;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  z-index: 999999 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  backdrop-filter: blur(12px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: width 0.3s ease, background 0.3s ease, border 0.3s ease, box-shadow 0.3s ease;
 }
 
 .ai-popup-header {
@@ -25,10 +29,12 @@
 }
 
 .ai-popup-title {
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 12px; /* Increased from 11px */
-  letter-spacing: 0.3px;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 12px !important; /* Increased from 11px */
+  letter-spacing: 0.3px !important;
+  text-transform: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
 .ai-popup-toggle {
@@ -42,6 +48,12 @@
   font-size: 14px; /* Reduced from 18px */
   line-height: 1;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0;
+  margin: 0;
 }
 
 .ai-popup-toggle:hover {
@@ -56,13 +68,47 @@
   gap: 3px; /* Reduced from 8px */
   max-height: 360px; /* 40% smaller: 600 * 0.6 */
   overflow-y: auto;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
+}
+
+.ai-popup-content.transitioning {
+  overflow: hidden;
 }
 
 .ai-popup-content.collapsed {
   max-height: 0;
   padding: 0 6px;
   overflow: hidden;
+}
+
+/* Collapsed state styling - make more transparent and narrower */
+#ai-assistant-popup:has(.ai-popup-content.collapsed) {
+  width: 110px !important;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.12) 0%, rgba(22, 33, 62, 0.10) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: none;
+}
+
+#ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: none;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
+#ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-title {
+  color: rgba(101, 101, 112, 0.85);
+}
+
+#ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-toggle {
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(60, 60, 70, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+#ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-toggle:hover {
+  background: rgba(255, 255, 255, 0.95);
+  color: rgba(40, 40, 50, 1);
 }
 
 .ai-popup-content::-webkit-scrollbar {
@@ -80,22 +126,25 @@
 }
 
 .ai-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  text-align: left;
-  line-height: 1.2;
-  white-space: nowrap; /* Prevent text wrapping */
-  width: 100%; /* Take full width of container */
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  text-align: left !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important; /* Prevent text wrapping */
+  width: 100% !important; /* Take full width of container */
+  box-sizing: border-box !important;
+  text-transform: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
 .ai-btn:hover {
@@ -116,27 +165,28 @@
 }
 
 .ai-btn-primary {
-  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
-  border: none;
-  font-weight: 600;
-  margin-top: 2px;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%) !important;
+  border: none !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3) !important;
 }
 
 .ai-btn-primary:hover {
-  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5);
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%) !important;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5) !important;
 }
 
 .ai-btn-secondary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  font-weight: 600;
-  margin-top: 2px; /* Reduced from 4px */
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .ai-btn-secondary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
 }
 
 /* TTS Button Row */
@@ -186,7 +236,7 @@
   top: 20px;
   left: 50%;
   transform: translateX(-50%) translateY(-100px);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   color: white;
   padding: 14px 24px;
   border-radius: 12px;
@@ -205,9 +255,13 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   #ai-assistant-popup {
-    width: 160px; /* Same fixed width on mobile */
-    top: 10px;
+    width: 140px; /* More compact width on mobile */
+    top: 60px;
     right: 10px;
+  }
+  
+  #ai-assistant-popup:has(.ai-popup-content.collapsed) {
+    width: 100px;
   }
   
   .ai-btn {

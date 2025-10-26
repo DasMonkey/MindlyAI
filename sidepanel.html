@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Assistant Dashboard</title>
+  <title>Mentelo Dashboard</title>
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>✨ AI Assistant</h1>
+      <h1>✨ Mentelo</h1>
       <div class="api-status">
         <span class="status-indicator" id="apiStatus"></span>
         <span id="apiStatusText">Not configured</span>
@@ -25,7 +25,6 @@
         <button class="tab" data-tab="mindy" title="Call Mindy">🎤</button>
         <button class="tab" data-tab="clipboard" title="Clipboard">📋</button>
         <button class="tab" data-tab="bookmarks" title="Bookmarks">🔖</button>
-        <button class="tab" data-tab="history" title="History">📜</button>
         <button class="tab" data-tab="settings" title="Settings">⚙️</button>
       </div>
 
@@ -73,6 +72,12 @@
           </div>
         </div>
       </div>
+      
+      <!-- Tab Change Notification Button -->
+      <button id="chatRefreshBtn" class="chat-refresh-btn" style="display: none;">
+        <span class="refresh-icon">🔄</span>
+        <span class="refresh-text">New page detected - Start fresh chat</span>
+      </button>
       
       <div class="chat-input-container">
         <input type="text" id="chatInput" class="chat-input" placeholder="Ask me anything about this page..." />
@@ -132,16 +137,11 @@
       <div class="section">
         <div class="section-header">
           <h2>🔖 Saved Bookmarks</h2>
-          <button id="organizeBtn" class="btn btn-secondary">🤖 AI Organize</button>
+          <button id="clearAllBookmarksBtn" class="btn btn-danger">🗑️ Clear All</button>
         </div>
         <div id="bookmarksList" class="bookmarks-list">
           <p class="placeholder">No bookmarks saved yet.</p>
         </div>
-      </div>
-
-      <div class="section" id="groupsSection" style="display: none;">
-        <h2>📁 AI-Organized Groups</h2>
-        <div id="groupsList" class="groups-list"></div>
       </div>
     </div>
 
@@ -196,13 +196,14 @@
         <div class="input-group">
           <label for="mindyVoice">Voice:</label>
           <select id="mindyVoice" class="select-input">
-            <option value="Puck">Puck - Female (Upbeat)</option>
-            <option value="Aoede">Aoede - Female (Breezy)</option>
+            <option value="Zephyr">Zephyr - Female (Clear)</option>
+            <option value="Puck">Puck - Male (Upbeat)</option>
+            <option value="Aoede" selected>Aoede - Female (Breezy)</option>
             <option value="Charon">Charon - Male (Informative)</option>
             <option value="Kore">Kore - Female (Firm)</option>
             <option value="Fenrir">Fenrir - Male (Excitable)</option>
             <option value="Orbit">Orbit - Male (Firm)</option>
-            <option value="Puck2">Puck 2 - Female (Upbeat, alt)</option>
+            <option value="Puck2">Puck 2 - Male (Upbeat, alt)</option>
             <option value="Charon2">Charon 2 - Male (Informative, alt)</option>
           </select>
           <button id="saveMindyVoice" class="btn btn-primary">Save</button>

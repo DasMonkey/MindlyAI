@@ -87,7 +87,7 @@ class YouTubeSummary {
       <div class="yt-summary-header">
         <div class="yt-summary-title">
           <span class="yt-summary-icon">✨</span>
-          <span>MindlyAI</span>
+          <span>Mentelo</span>
         </div>
         <button class="yt-summary-collapse" title="Collapse">−</button>
       </div>

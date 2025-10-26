@@ -4,6 +4,18 @@ let apiKey = null;
 let pageContent = null;
 let chatHistory = [];
 
+// Tab tracking for Chat with Page
+let currentPageTab = {
+  id: null,
+  url: null
+};
+
+// Track the original chat session tab
+let chatSessionTab = {
+  id: null,
+  url: null
+};
+
 // PDF Page Management
 let pdfMode = {
   isActive: false,
@@ -142,14 +154,14 @@ function setupEventListeners() {
   document.getElementById('downloadBtn').addEventListener('click', downloadResult);
   document.getElementById('regenerateBtn').addEventListener('click', regenerateContent);
   
-  // Bookmarks
-  document.getElementById('organizeBtn').addEventListener('click', organizeBookmarks);
-  
   // History
   document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
   
   // Clipboard
   document.getElementById('clearClipboardBtn').addEventListener('click', clearClipboard);
+  
+  // Bookmarks
+  document.getElementById('clearAllBookmarksBtn').addEventListener('click', clearAllBookmarks);
   
   // Chat
   document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
@@ -160,12 +172,35 @@ function setupEventListeners() {
     }
   });
   document.getElementById('clearChatBtn').addEventListener('click', clearChat);
+  document.getElementById('chatRefreshBtn').addEventListener('click', startFreshChatSession);
   
   // Call Mindy
   document.getElementById('mindyStartBtn').addEventListener('click', startMindyCall);
   document.getElementById('mindyMuteBtn').addEventListener('click', toggleMindyMute);
   document.getElementById('mindyEndBtn').addEventListener('click', endMindyCall);
 }
+
+// Listen for tab activation changes
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  // Check if we're on the chat tab in sidepanel
+  const currentTab = document.querySelector('.tab.active')?.dataset.tab;
+  if (currentTab === 'chat') {
+    await checkForTabChange();
+  }
+});
+
+// Listen for tab URL updates (same tab, different URL)
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0] && tabs[0].id === tabId) {
+      const currentTab = document.querySelector('.tab.active')?.dataset.tab;
+      if (currentTab === 'chat') {
+        await checkForTabChange();
+      }
+    }
+  }
+});
 
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -258,7 +293,7 @@ function saveMindyVoice() {
 async function loadMindyVoiceUI() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['mindyVoice'], (result) => {
-      const voice = result.mindyVoice || 'Puck';
+      const voice = result.mindyVoice || 'Aoede';
       const select = document.getElementById('mindyVoice');
       if (select) {
         select.value = voice;
@@ -272,7 +307,7 @@ async function loadMindyVoiceUI() {
 async function loadMindyVoice() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['mindyVoice'], (result) => {
-      resolve(result.mindyVoice || 'Puck');
+      resolve(result.mindyVoice || 'Aoede');
     });
   });
 }
@@ -1143,19 +1178,21 @@ async function loadBookmarks() {
     // Sort domains alphabetically
     const sortedDomains = Object.keys(grouped).sort();
     
-    // Render grouped bookmarks
-    listDiv.innerHTML = sortedDomains.map(domain => {
+    // Render grouped bookmarks with collapsible functionality
+    listDiv.innerHTML = sortedDomains.map((domain, groupIndex) => {
       const domainBookmarks = grouped[domain];
       const favicon = domainBookmarks[0].favicon || '';
+      const groupId = `bookmark-group-${groupIndex}`;
       
       return `
         <div class="bookmark-group">
-          <div class="bookmark-group-header">
+          <div class="bookmark-group-header" data-group-id="${groupId}">
+            <span class="bookmark-group-toggle" id="${groupId}-toggle">▼</span>
             ${favicon ? `<img src="${favicon}" class="bookmark-favicon" alt="">` : '🌐'}
             <span class="bookmark-domain">${domain}</span>
             <span class="bookmark-count">(${domainBookmarks.length})</span>
           </div>
-          <div class="bookmark-group-items">
+          <div class="bookmark-group-items" id="${groupId}">
             ${domainBookmarks.map(bookmark => `
               <div class="bookmark-item">
                 <a href="${bookmark.url}" target="_blank" class="bookmark-link">
@@ -1164,7 +1201,7 @@ async function loadBookmarks() {
                 </a>
                 <div class="bookmark-meta">
                   <span class="bookmark-time">${new Date(bookmark.timestamp).toLocaleDateString()}</span>
-                  <button class="btn btn-danger btn-small" onclick="deleteBookmark(${bookmark.originalIndex})">🗑️</button>
+                  <button class="btn btn-danger btn-small" data-bookmark-index="${bookmark.originalIndex}">🗑️</button>
                 </div>
               </div>
             `).join('')}
@@ -1172,7 +1209,41 @@ async function loadBookmarks() {
         </div>
       `;
     }).join('');
+    
+    // Add event listeners for group headers (toggle collapse)
+    document.querySelectorAll('#bookmarksList .bookmark-group-header').forEach(header => {
+      header.addEventListener('click', (e) => {
+        const groupId = header.getAttribute('data-group-id');
+        toggleBookmarkGroup(groupId);
+      });
+    });
+    
+    // Add event listeners for delete buttons
+    document.querySelectorAll('#bookmarksList .btn-danger').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const index = parseInt(btn.getAttribute('data-bookmark-index'));
+        if (confirm('Delete this bookmark?')) {
+          deleteBookmark(index);
+        }
+      });
+    });
   });
+}
+
+// Toggle bookmark group visibility
+function toggleBookmarkGroup(groupId) {
+  const group = document.getElementById(groupId);
+  const toggle = document.getElementById(`${groupId}-toggle`);
+  
+  if (group.style.display === 'none') {
+    group.style.display = 'block';
+    toggle.textContent = '▼';
+  } else {
+    group.style.display = 'none';
+    toggle.textContent = '▶';
+  }
 }
 
 // Delete bookmark
@@ -1183,6 +1254,15 @@ function deleteBookmark(index) {
     chrome.storage.local.set({ bookmarks }, () => {
       loadBookmarks();
     });
+  });
+}
+
+// Clear all bookmarks
+function clearAllBookmarks() {
+  if (!confirm('Delete all bookmarks?')) return;
+  
+  chrome.storage.local.set({ bookmarks: [] }, () => {
+    loadBookmarks();
   });
 }
 
@@ -1384,6 +1464,16 @@ async function loadPageContent() {
           resolve();
         } else if (response && response.content) {
           pageContent = response.content;
+          
+          // Initialize chat session tab on first page load
+          if (!chatSessionTab.id) {
+            chatSessionTab.id = tab.id;
+            chatSessionTab.url = tab.url;
+            currentPageTab.id = tab.id;
+            currentPageTab.url = tab.url;
+            console.log('🎯 Chat session initialized with tab:', tab.id, tab.url);
+          }
+          
           resolve();
         } else {
           pageContent = 'No content available from this page.';
@@ -1395,6 +1485,77 @@ async function loadPageContent() {
     console.log('Could not load page content:', error);
     pageContent = 'Error loading page content.';
   }
+}
+
+// Detect tab changes and show refresh button if needed
+async function checkForTabChange() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]) {
+    const newTabId = tabs[0].id;
+    const newUrl = tabs[0].url;
+    
+    // Only check if session has been initialized
+    if (!chatSessionTab.id) {
+      return; // No session yet, nothing to check
+    }
+    
+    // Check if this is a different tab or URL
+    if (currentPageTab.id && (currentPageTab.id !== newTabId || currentPageTab.url !== newUrl)) {
+      const refreshBtn = document.getElementById('chatRefreshBtn');
+      if (refreshBtn) {
+        // Check if returning to original session tab
+        if (chatSessionTab.id === newTabId && chatSessionTab.url === newUrl) {
+          // Back to original session - hide button
+          refreshBtn.style.display = 'none';
+        } else {
+          // Different page - show button
+          refreshBtn.style.display = 'flex';
+        }
+      }
+    }
+    
+    // Update tracking
+    currentPageTab.id = newTabId;
+    currentPageTab.url = newUrl;
+  }
+}
+
+// Start fresh chat session with new page
+async function startFreshChatSession() {
+  // Clear chat messages except welcome message
+  const chatMessages = document.getElementById('chatMessages');
+  chatMessages.innerHTML = `
+    <div class="chat-message ai-message">
+      <div class="message-avatar">🤖</div>
+      <div class="message-content">
+        <p>Hello! I'm ready to answer questions about this page. What would you like to know?</p>
+      </div>
+    </div>
+  `;
+  
+  // Clear page content and chat history
+  pageContent = null;
+  chatHistory = [];
+  
+  // Update session tab to current tab (new session starts here)
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]) {
+    chatSessionTab.id = tabs[0].id;
+    chatSessionTab.url = tabs[0].url;
+    currentPageTab.id = tabs[0].id;
+    currentPageTab.url = tabs[0].url;
+  }
+  
+  // Load new page content
+  await loadPageContent();
+  
+  // Hide refresh button
+  const refreshBtn = document.getElementById('chatRefreshBtn');
+  if (refreshBtn) {
+    refreshBtn.style.display = 'none';
+  }
+  
+  console.log('✅ Started fresh chat session with new page');
 }
 
 // Send chat message
@@ -2018,7 +2179,7 @@ async function loadClipboardHistory() {
       if (item.type === 'text') {
         const preview = item.content.length > 200 ? item.content.substring(0, 200) + '...' : item.content;
         return `
-          <div class="clipboard-item" onclick="copyClipboardItem(${index})">
+          <div class="clipboard-item" data-clipboard-index="${index}">
             <div class="clipboard-item-header">
               <span class="clipboard-item-type">TEXT</span>
               <span class="clipboard-item-time">${timeAgo}</span>
@@ -2027,14 +2188,14 @@ async function loadClipboardHistory() {
               <div class="clipboard-item-text">${escapeHtml(preview)}</div>
             </div>
             <div class="clipboard-item-actions">
-              <button class="btn btn-secondary" onclick="event.stopPropagation(); copyClipboardItem(${index})">📋 Copy</button>
-              <button class="btn btn-danger" onclick="event.stopPropagation(); deleteClipboardItem(${index})">🗑️ Delete</button>
+              <button class="btn btn-secondary clipboard-copy-btn" data-clipboard-index="${index}">📋 Copy</button>
+              <button class="btn btn-danger clipboard-delete-btn" data-clipboard-index="${index}">🗑️ Delete</button>
             </div>
           </div>
         `;
       } else if (item.type === 'image') {
         return `
-          <div class="clipboard-item" onclick="copyClipboardItem(${index})">
+          <div class="clipboard-item" data-clipboard-index="${index}">
             <div class="clipboard-item-header">
               <span class="clipboard-item-type">IMAGE</span>
               <span class="clipboard-item-time">${timeAgo}</span>
@@ -2043,13 +2204,48 @@ async function loadClipboardHistory() {
               <img src="${item.content}" class="clipboard-item-image" alt="Clipboard image">
             </div>
             <div class="clipboard-item-actions">
-              <button class="btn btn-secondary" onclick="event.stopPropagation(); copyClipboardItem(${index})">📋 Copy</button>
-              <button class="btn btn-danger" onclick="event.stopPropagation(); deleteClipboardItem(${index})">🗑️ Delete</button>
+              <button class="btn btn-secondary clipboard-copy-btn" data-clipboard-index="${index}">📋 Copy</button>
+              <button class="btn btn-danger clipboard-delete-btn" data-clipboard-index="${index}">🗑️ Delete</button>
             </div>
           </div>
         `;
       }
     }).join('');
+    
+    // Attach event listeners to clipboard items
+    const clipboardItems = listDiv.querySelectorAll('.clipboard-item');
+    clipboardItems.forEach(item => {
+      item.addEventListener('click', (e) => {
+        // Don't trigger if clicking on buttons
+        if (e.target.closest('button')) return;
+        const index = parseInt(item.dataset.clipboardIndex);
+        // Find the copy button within this item for visual feedback
+        const copyBtn = item.querySelector('.clipboard-copy-btn');
+        copyClipboardItem(index, copyBtn);
+      });
+    });
+    
+    // Attach event listeners to copy buttons
+    const copyButtons = listDiv.querySelectorAll('.clipboard-copy-btn');
+    copyButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt(btn.dataset.clipboardIndex);
+        copyClipboardItem(index, btn);
+      });
+    });
+    
+    // Attach event listeners to delete buttons
+    const deleteButtons = listDiv.querySelectorAll('.clipboard-delete-btn');
+    deleteButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt(btn.dataset.clipboardIndex);
+        if (confirm('Delete this clipboard item?')) {
+          deleteClipboardItem(index);
+        }
+      });
+    });
   });
 }
 
@@ -2069,31 +2265,44 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function copyClipboardItem(index) {
+async function copyClipboardItem(index, buttonElement) {
   chrome.storage.local.get(['clipboardHistory'], async (result) => {
     const history = result.clipboardHistory || [];
     if (history[index]) {
       const item = history[index];
       
-      if (item.type === 'text') {
-        await navigator.clipboard.writeText(item.content);
-        alert('✅ Copied to clipboard!');
-      } else if (item.type === 'image') {
-        // Convert data URL to blob and copy
-        const response = await fetch(item.content);
-        const blob = await response.blob();
-        await navigator.clipboard.write([
-          new ClipboardItem({ [blob.type]: blob })
-        ]);
-        alert('✅ Image copied to clipboard!');
+      try {
+        if (item.type === 'text') {
+          await navigator.clipboard.writeText(item.content);
+        } else if (item.type === 'image') {
+          // Convert data URL to blob and copy
+          const response = await fetch(item.content);
+          const blob = await response.blob();
+          await navigator.clipboard.write([
+            new ClipboardItem({ [blob.type]: blob })
+          ]);
+        }
+        
+        // Update button text to show "Copied"
+        if (buttonElement) {
+          const originalText = buttonElement.textContent;
+          buttonElement.textContent = '✓ Copied';
+          buttonElement.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+          
+          // Reset after 2 seconds
+          setTimeout(() => {
+            buttonElement.textContent = originalText;
+            buttonElement.style.background = '';
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('Failed to copy:', error);
       }
     }
   });
 }
 
 function deleteClipboardItem(index) {
-  if (!confirm('Delete this clipboard item?')) return;
-  
   chrome.storage.local.get(['clipboardHistory'], (result) => {
     const history = result.clipboardHistory || [];
     history.splice(index, 1);
@@ -2271,6 +2480,7 @@ async function extractImageText(imageUrl) {
 
 // Make functions global for inline onclick
 window.deleteBookmark = deleteBookmark;
+window.toggleBookmarkGroup = toggleBookmarkGroup;
 window.viewHistoryItem = viewHistoryItem;
 window.deleteHistoryItem = deleteHistoryItem;
 window.copyClipboardItem = copyClipboardItem;
@@ -2398,7 +2608,7 @@ async function startMindyCall() {
           },
           systemInstruction: {
             parts: [{
-              text: `You are Mindy, a helpful voice assistant. The user is viewing a webpage. Here's the content:\n\n${pageContext}\n\nAnswer questions clearly and concisely. Be friendly and helpful. You can search the internet for current information when needed.`
+              text: `Your name is Mindy. You are a helpful voice assistant designed to help users understand and interact with web content. When the user speaks to you, they're calling for "Mindy". Always respond as Mindy - introduce yourself when appropriate and refer to yourself by this name.\n\nThe user is viewing a webpage. Here's the content:\n\n${pageContext}\n\nAnswer questions clearly and concisely. Be friendly and helpful. You can search the internet for current information when needed.`
             }]
           },
           tools: [{
@@ -2825,8 +3035,13 @@ function updateLiveTranscript(role, text) {
     }
   }
   
-  // Auto-scroll to bottom
-  container.scrollTop = container.scrollHeight;
+  // Auto-scroll to bottom - scroll the parent container with overflow
+  const scrollContainer = container.parentElement;
+  if (scrollContainer) {
+    setTimeout(() => {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }, 0);
+  }
 }
 
 // Finalize live transcripts (remove live indicator when turn completes)
@@ -2863,7 +3078,13 @@ function addMindyTranscript(role, text) {
   `;
 
   container.appendChild(message);
-  container.scrollTop = container.scrollHeight;
+  // Auto-scroll to bottom - scroll the parent container with overflow
+  const scrollContainer = container.parentElement;
+  if (scrollContainer) {
+    setTimeout(() => {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }, 0);
+  }
 }
 
 async function getPageContext(tab) {

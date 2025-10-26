@@ -2,7 +2,7 @@
 
 ## ✅ Implementation Complete
 
-Added a new right-click context menu option: **"MindlyAI: Explain This Image"**
+Added a new right-click context menu option: **"Mentelo: Explain This Image"**
 
 ---
 
@@ -30,7 +30,7 @@ Added new context menu item:
 ```javascript
 chrome.contextMenus.create({
   id: 'explainImage',
-  title: 'MindlyAI: Explain This Image',
+  title: 'Mentelo: Explain This Image',
   contexts: ['image']
 });
 ```
@@ -144,7 +144,7 @@ Format your response with clear sections and bullet points where appropriate.`;
 
 ### How to Use
 1. Right-click any image on a webpage
-2. Select **"MindlyAI: Explain This Image"**
+2. Select **"Mentelo: Explain This Image"**
 3. Side panel opens automatically
 4. View comprehensive explanation in Generate tab
 5. Copy or download the analysis
@@ -348,5 +348,5 @@ Potential additions:
 ## Quick Start
 
 1. **Reload Extension**: Go to `chrome://extensions/` and click refresh
-2. **Test It**: Right-click any image → "MindlyAI: Explain This Image"
+2. **Test It**: Right-click any image → "Mentelo: Explain This Image"
 3. **Enjoy**: Get comprehensive AI-powered image analysis!

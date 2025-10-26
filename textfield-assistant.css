@@ -21,19 +21,19 @@
   width: 16px;
   height: 16px;
   padding: 0;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   border: none;
   border-radius: 50%;
   color: white;
   cursor: pointer;
   transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.35);
 }
 
 .ai-selection-trigger-btn:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
   transform: scale(1.5);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.45);
 }
 
 .ai-selection-trigger-btn:active {
@@ -72,6 +72,19 @@
   cursor: pointer;
   transition: all 150ms ease;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  color: #1e293b !important; /* Ensure text/icons are dark and never white */
+}
+
+/* Force dark color for the checkmark icon specifically */
+.ai-selection-compact-btn[data-action="fix"] {
+  color: #059669 !important; /* Green color for the checkmark, much more visible */
+  font-weight: 600; /* Make it bolder for better visibility */
+}
+
+/* Ensure the checkmark has proper contrast */
+.ai-selection-compact-btn[data-action="fix"]:hover {
+  color: #047857 !important; /* Darker green on hover */
+  background: #f0fdf4; /* Light green background on hover for better contrast */
 }
 
 .ai-selection-compact-btn:hover {
@@ -86,14 +99,14 @@
 }
 
 .ai-selection-compact-btn.ai-selection-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-color: #6366f1;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  border-color: #f59e0b;
   color: white;
 }
 
 .ai-selection-compact-btn.ai-selection-primary:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.3);
 }
 
 .ai-selection-compact-btn svg {
@@ -110,8 +123,8 @@
 .ai-selection-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(99, 102, 241, 0.3);
-  border-top-color: #6366f1;
+  border: 2px solid rgba(245, 158, 11, 0.3);
+  border-top-color: #f59e0b;
   border-radius: 50%;
   animation: spin 600ms linear infinite;
 }
@@ -120,13 +133,13 @@
 .ai-trigger-icon {
   width: 16px;
   height: 16px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
   opacity: 0;
   transform: scale(0.8);
   transform-origin: bottom right;
@@ -142,7 +155,14 @@
 
 .ai-trigger-icon:hover {
   transform: scale(1.5);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+}
+
+/* Active state when toolbar is open */
+.ai-trigger-icon.active {
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.6);
+  transform: scale(1.2);
 }
 
 .ai-trigger-icon svg {
@@ -155,7 +175,7 @@
 .ai-toolbar {
   opacity: 0;
   transform: translateY(-5px) scale(0.9);
-  transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 50ms cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: none;
   background: transparent;
   border-radius: 0;
@@ -215,15 +235,15 @@
 }
 
 .ai-toolbar-btn-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-color: #6366f1;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  border-color: #f59e0b;
   color: white;
 }
 
 .ai-toolbar-btn-primary:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .ai-toolbar-icon {
@@ -261,7 +281,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
+  padding: 12px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -276,7 +296,7 @@
   width: 20px;
   height: 20px;
   border: 2px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border-top-color: #f59e0b;
   border-radius: 50%;
   animation: spin 600ms linear infinite;
 }
@@ -290,7 +310,7 @@
 /* Comparison View */
 .ai-toolbar-comparison {
   display: block;
-  padding: 12px;
+  padding: 6px;
   background: white !important;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -311,7 +331,7 @@
   max-height: 150px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px;
+  padding: 6px;
   background: #f8fafc;
   border-radius: 6px;
   border: none;
@@ -345,11 +365,12 @@
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .ai-toolbar-result-btn {
   padding: 8px 16px;
-  background: #6366f1;
+  background: #f59e0b;
   color: white;
   border: none;
   border-radius: 6px;
@@ -361,9 +382,9 @@
 }
 
 .ai-toolbar-result-btn:hover {
-  background: #4f46e5;
+  background: #ea580c;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 
 .ai-toolbar-result-btn:active {
@@ -428,7 +449,7 @@
 /* Accessibility */
 .ai-toolbar-btn:focus-visible,
 .ai-toolbar-result-btn:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid #f59e0b;
   outline-offset: 2px;
 }
 

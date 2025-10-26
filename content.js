@@ -12,9 +12,9 @@ function checkSidePanelAndAdjustPopup() {
   
   // If popup is too close to the right edge (likely hidden by side panel)
   if (popupRect.right > viewportWidth - 50) {
-    // Move popup to the left
-    const newRight = viewportWidth - 20;
-    floatingPopup.style.right = '20px';
+    // Recalculate and maintain right positioning for right-to-left expansion
+    const currentRight = viewportWidth - popupRect.right;
+    floatingPopup.style.right = currentRight + "px";
     floatingPopup.style.left = 'auto';
   }
 }
@@ -38,7 +38,7 @@ function createFloatingPopup() {
   
   floatingPopup.innerHTML = `
     <div class="ai-popup-header">
-      <span class="ai-popup-title">✨ MindlyAI</span>
+      <span class="ai-popup-title">✨ Mentelo</span>
       <button class="ai-popup-toggle" title="Minimize/Expand">−</button>
     </div>
     <div class="ai-popup-content">
@@ -76,13 +76,17 @@ function createFloatingPopup() {
         </button>
       </div>
       <button class="ai-btn ai-btn-secondary" data-action="open-panel">
-        <span class="ai-btn-icon">📊</span>
+        <span class="ai-btn-icon">⚙️</span>
         Open Dashboard
       </button>
     </div>
   `;
 
   document.body.appendChild(floatingPopup);
+
+  // Ensure initial right positioning for right-to-left expansion
+  floatingPopup.style.right = '20px';
+  floatingPopup.style.left = 'auto';
 
   // Make draggable
   makeDraggable(floatingPopup);
@@ -99,9 +103,18 @@ function createFloatingPopup() {
   }
   
   toggleBtn.addEventListener('click', () => {
+    // Add transitioning class to prevent scrollbar flash
+    content.classList.add('transitioning');
+    
     content.classList.toggle('collapsed');
     const collapsed = content.classList.contains('collapsed');
     toggleBtn.textContent = collapsed ? '+' : '−';
+    
+    // Remove transitioning class after transition completes
+    setTimeout(() => {
+      content.classList.remove('transitioning');
+    }, 300);
+    
     // Save state to localStorage
     localStorage.setItem('ai-popup-collapsed', collapsed);
   });
@@ -116,27 +129,41 @@ function createFloatingPopup() {
 }
 
 function makeDraggable(element) {
-  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  let initialX = 0, initialY = 0;
+  let currentTop = 0, currentRight = 0;
   const header = element.querySelector('.ai-popup-header');
 
   header.onmousedown = dragMouseDown;
 
   function dragMouseDown(e) {
     e.preventDefault();
-    pos3 = e.clientX;
-    pos4 = e.clientY;
+    e.stopPropagation();
+    
+    // Get current position values
+    const computedStyle = window.getComputedStyle(element);
+    currentTop = parseInt(computedStyle.top) || 0;
+    currentRight = parseInt(computedStyle.right) || 0;
+    
+    // Store initial mouse position
+    initialX = e.clientX;
+    initialY = e.clientY;
+    
     document.onmouseup = closeDragElement;
     document.onmousemove = elementDrag;
   }
 
   function elementDrag(e) {
     e.preventDefault();
-    pos1 = pos3 - e.clientX;
-    pos2 = pos4 - e.clientY;
-    pos3 = e.clientX;
-    pos4 = e.clientY;
-    element.style.top = (element.offsetTop - pos2) + "px";
-    element.style.left = (element.offsetLeft - pos1) + "px";
+    e.stopPropagation();
+    
+    // Calculate how much mouse moved
+    const deltaX = initialX - e.clientX;
+    const deltaY = initialY - e.clientY;
+    
+    // Update position directly based on deltas
+    element.style.top = (currentTop - deltaY) + "px";
+    element.style.right = (currentRight + deltaX) + "px";
+    element.style.left = "auto";
   }
 
   function closeDragElement() {
@@ -309,7 +336,7 @@ async function getPageText(forceExtract = false) {
       if (selection && selection.length > 100) {
         console.log('✅ Using user-selected PDF text, length:', selection.length);
         // Filter out floating menu text
-        if (!selection.includes('AI Assistant') && !selection.includes('Summarize Page')) {
+        if (!selection.includes('Mentelo') && !selection.includes('Summarize Page')) {
           window.pdfExtractedText = selection; // Cache it
           return selection;
         } else {
@@ -1042,7 +1069,7 @@ function injectTranslatedText(translatedText) {
         <div style="
           position: sticky;
           top: 0;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
           color: white;
           padding: 15px 20px;
           border-radius: 8px;
