@@ -3,9 +3,7 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  width: auto; /* Auto width to fit content */
-  min-width: 140px; /* Minimum width */
-  max-width: 180px; /* Maximum width */
+  width: 160px; /* Fixed width - no more auto-sizing */
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -207,7 +205,7 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   #ai-assistant-popup {
-    width: 156px; /* 40% smaller for mobile */
+    width: 160px; /* Same fixed width on mobile */
     top: 10px;
     right: 10px;
   }

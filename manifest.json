@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "AI Content Assistant",
+  "name": "MindlyAI",
   "version": "1.0.0",
   "description": "AI-powered content assistant with summarization, translation, mindmap, and social media content generation",
   "permissions": [
@@ -36,9 +36,15 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js", "textfield-assistant.js", "grammar-checker.js", "gemini-live-connection.js", "audio-processor.js"],
-      "css": ["content.css", "textfield-assistant.css", "grammar-checker.css", "gemini-live-modal.css"],
+      "js": ["content.js", "textfield-assistant.js", "grammar-checker.js", "gemini-live-connection.js", "audio-processor.js", "youtube-summary.js"],
+      "css": ["content.css", "textfield-assistant.css", "grammar-checker.css", "gemini-live-modal.css", "youtube-summary.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["file:///*.pdf", "*://*/*.pdf"],
+      "js": ["pdf-content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [

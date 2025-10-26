@@ -62,6 +62,9 @@
         <button id="clearChatBtn" class="btn btn-secondary">🗑️ Clear</button>
       </div>
       
+      <!-- PDF Status Banner for Chat -->
+      <div id="pdfStatusBannerChat" class="pdf-status-banner" style="display: none;"></div>
+      
       <div id="chatMessages" class="chat-messages">
         <div class="chat-message ai-message">
           <div class="message-avatar">🤖</div>
@@ -89,6 +92,9 @@
             <p id="mindyStatusPanel">Ready to start</p>
           </div>
         </div>
+        
+        <!-- PDF Status Banner for Mindy -->
+        <div id="pdfStatusBannerMindy" class="pdf-status-banner" style="display: none;"></div>
         
         <div class="mindy-transcript-panel">
           <div id="mindyTranscriptPanel">
@@ -247,6 +253,19 @@
     </div>
       </div> <!-- Close content-area -->
     </div> <!-- Close main-layout -->
+  </div>
+
+  <!-- PDF Page Number Input Modal -->
+  <div id="pdfPageModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h3>📄 Enter PDF Page Number</h3>
+      <p style="margin: 12px 0; opacity: 0.8;">Look at the top-left of the PDF viewer (e.g., "10 / 12")</p>
+      <input type="number" id="pdfPageInput" class="modal-input" placeholder="Enter page number" min="1" value="1" />
+      <div class="modal-buttons">
+        <button id="pdfPageConfirm" class="btn btn-primary">✓ Capture</button>
+        <button id="pdfPageCancel" class="btn btn-secondary">✗ Cancel</button>
+      </div>
+    </div>
   </div>
 
   <script src="sidepanel.js"></script>

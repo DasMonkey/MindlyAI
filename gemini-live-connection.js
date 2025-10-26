@@ -382,17 +382,55 @@ class MindyModal {
     }
   }
 
+  cleanTranscriptText(text) {
+    console.log('Original transcript:', text);
+    
+    // Remove filler words (must be standalone or with punctuation)
+    const fillerWords = /\b(um|uh|uhh|ahh|ehh|er|hmm|like|you know)\b[,\s]*/gi;
+    
+    // Fix broken words: "whe n" -> "when", "ini tial" -> "initial", "fir st" -> "first"
+    // This handles both single letters and partial words with spaces
+    let cleaned = text;
+    
+    // Join broken word parts (handles "whe n", "ini tial", etc.)
+    // Look for sequences of 1-5 letters followed by space and more letters
+    for (let i = 0; i < 5; i++) {
+      cleaned = cleaned.replace(/\b([a-z]{1,5})\s+([a-z]{1,5})\b/gi, (match, p1, p2) => {
+        // Only join if combined length is reasonable (2-10 chars for a word)
+        const combined = p1 + p2;
+        if (combined.length <= 10) {
+          return combined;
+        }
+        return match;
+      });
+    }
+    
+    const result = cleaned
+      .replace(fillerWords, '')           // Remove filler words
+      .replace(/\s+/g, ' ')               // Collapse multiple spaces
+      .replace(/\s+([.,!?])/g, '$1')      // Fix spacing before punctuation
+      .replace(/\s*,\s*/g, ', ')          // Normalize comma spacing
+      .trim()                             // Remove leading/trailing spaces
+      .replace(/^[a-z]/, (c) => c.toUpperCase()); // Capitalize first letter
+    
+    console.log('Cleaned transcript:', result);
+    return result;
+  }
+
   addTranscript(role, text) {
     this.clearInfo();
     
     const container = document.getElementById('mindy-transcript-content');
     if (!container) return;
 
+    // Clean the transcript text
+    const cleanText = this.cleanTranscriptText(text);
+
     const message = document.createElement('div');
     message.className = `mindy-message ${role}`;
     message.innerHTML = `
       <div class="mindy-message-label">${role === 'user' ? 'You' : 'Mindy'}</div>
-      <p class="mindy-message-text">${text}</p>
+      <p class="mindy-message-text">${cleanText}</p>
     `;
 
     container.appendChild(message);

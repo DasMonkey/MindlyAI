@@ -163,8 +163,11 @@ class SelectionPopup {
       </button>
     `;
     
-    this.element.style.position = 'absolute';
+    // Use fixed positioning to prevent affecting page layout
+    // Position will be set in positionNearSelection()
+    this.element.style.position = 'fixed';
     this.element.style.zIndex = '10001';
+    this.element.style.pointerEvents = 'none'; // Will be enabled when visible
     
     document.body.appendChild(this.element);
     this.attachListeners();
@@ -322,17 +325,17 @@ class SelectionPopup {
     const range = this.savedRange;
     const rect = range.getBoundingClientRect();
     
-    // Position below the selection
-    this.element.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    // Position below the selection (using fixed positioning, so no need for scrollY)
+    this.element.style.top = `${rect.bottom + 5}px`;
     
     // Center horizontally on the selection
     const selectionCenter = rect.left + (rect.width / 2);
     const popupWidth = this.element.offsetWidth || 300;
-    let left = selectionCenter + window.scrollX - (popupWidth / 2);
+    let left = selectionCenter - (popupWidth / 2);
     
-    // Ensure it stays on screen
-    const minLeft = window.scrollX + 10;
-    const maxLeft = window.scrollX + window.innerWidth - popupWidth - 10;
+    // Ensure it stays on screen (using viewport coordinates)
+    const minLeft = 10;
+    const maxLeft = window.innerWidth - popupWidth - 10;
     left = Math.max(minLeft, Math.min(left, maxLeft));
     
     this.element.style.left = `${left}px`;
@@ -342,6 +345,7 @@ class SelectionPopup {
     // Need to add to DOM first, then position, then show
     setTimeout(() => {
       this.positionNearSelection();
+      this.element.style.pointerEvents = 'all'; // Enable interactions
       this.element.classList.add('visible');
     }, 10);
   }
@@ -361,6 +365,8 @@ class TriggerIcon {
     this.assistant = assistant;
     this.element = null;
     this.visible = false;
+    this.lockUntil = 0; // timestamp to prevent jittery repositioning
+    this.initialFieldRect = null; // Store initial field position
     this.create();
     this.attachListeners();
   }
@@ -377,9 +383,10 @@ class TriggerIcon {
       </svg>
     `;
     
-    // Position relative to field
-    this.element.style.position = 'absolute';
+    // Use fixed positioning to prevent drift with scrolling content
+    this.element.style.position = 'fixed';
     this.element.style.zIndex = '10000';
+    this.element.style.pointerEvents = 'all';
     this.updatePosition();
     
     document.body.appendChild(this.element);
@@ -390,7 +397,7 @@ class TriggerIcon {
     this.field.addEventListener('focus', () => this.show());
     this.field.addEventListener('mouseenter', () => this.show());
     
-    // Hide on blur (with delay to allow click)
+    // Hide on blur (with delay), but do not change position here
     this.field.addEventListener('blur', () => {
       setTimeout(() => {
         if (!this.element.matches(':hover')) {
@@ -402,6 +409,8 @@ class TriggerIcon {
     // Click to toggle toolbar
     this.element.addEventListener('click', (e) => {
       e.stopPropagation();
+      // lock position briefly to avoid jump when toolbar shows
+      this.lockUntil = Date.now() + 300;
       this.assistant.showToolbar(this, this.field);
     });
     
@@ -409,9 +418,19 @@ class TriggerIcon {
     this.field.addEventListener('mouseup', () => this.handleSelection());
     this.field.addEventListener('keyup', () => this.handleSelection());
     
-    // Update position on scroll/resize
-    window.addEventListener('scroll', () => this.updatePosition(), true);
-    window.addEventListener('resize', () => this.updatePosition());
+    // Update position ONLY on window scroll/resize (not field scroll or content changes)
+    // This keeps button fixed at field's visual boundary
+    const scrollHandler = (e) => {
+      // Only update if the scroll is from document/window, not from the text field
+      if (e.target === document || e.target === document.documentElement || e.target === document.body) {
+        this.updatePosition(true); // force recalc on page scroll
+      }
+    };
+    window.addEventListener('scroll', scrollHandler, true);
+    window.addEventListener('resize', () => this.updatePosition(true)); // force recalc on window resize
+    
+    // DO NOT observe field resize - we want to stay locked to initial field bounds
+    // even if content grows/shrinks inside
   }
 
   handleSelection() {
@@ -427,11 +446,74 @@ class TriggerIcon {
     }
   }
 
-  updatePosition() {
+  updatePosition(forceRecalc = false) {
+    // During a short lock window, skip recalculation to avoid flash/jump
+    if (Date.now() < this.lockUntil) return;
+
+    // If we have a stored position and not forcing recalc, keep using it
+    if (this.initialFieldRect && !forceRecalc) {
+      const iconW = this.element.offsetWidth || 16;
+      const iconH = this.element.offsetHeight || 16;
+      
+      // Use the STORED initial position - don't let field growth move the button
+      this.element.style.top = `${Math.round(this.initialFieldRect.bottom - iconH - 4)}px`;
+      this.element.style.left = `${Math.round(this.initialFieldRect.right - iconW - 4)}px`;
+      return;
+    }
+
+    // First time or forced: capture the field's current viewport position
     const rect = this.field.getBoundingClientRect();
-    // Position at bottom-right, fixed relative to the field's bottom-right corner
-    this.element.style.top = `${rect.top + window.scrollY + rect.height - 35}px`;
-    this.element.style.left = `${rect.left + window.scrollX + rect.width - 35}px`;
+    
+    // Check for existing buttons near bottom-right corner
+    const offsetFromRight = this.detectExistingButtons(rect);
+    
+    this.initialFieldRect = {
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right - offsetFromRight
+    };
+
+    const iconW = this.element.offsetWidth || 16;
+    const iconH = this.element.offsetHeight || 16;
+
+    // Position with 4px padding from edges
+    this.element.style.top = `${Math.round(this.initialFieldRect.bottom - iconH - 4)}px`;
+    this.element.style.left = `${Math.round(this.initialFieldRect.right - iconW - 4)}px`;
+  }
+  
+  detectExistingButtons(fieldRect) {
+    // Look for buttons, icons, or interactive elements near the bottom-right
+    // of the field (within the field's container or nearby)
+    const fieldElement = this.field;
+    const parent = fieldElement.parentElement;
+    
+    if (!parent) return 0;
+    
+    // Find all buttons, clickable elements near the field's bottom-right
+    const potentialButtons = parent.querySelectorAll('button, [role="button"], .icon, [class*="button"], [class*="icon"], [class*="action"]');
+    
+    let maxOffset = 0;
+    
+    potentialButtons.forEach(btn => {
+      if (btn === this.element) return; // skip our own button
+      
+      const btnRect = btn.getBoundingClientRect();
+      
+      // Check if button is in the bottom-right area of the field
+      const isInBottomRight = 
+        btnRect.top >= fieldRect.top + (fieldRect.height * 0.6) && // bottom 40% of field
+        btnRect.left >= fieldRect.left + (fieldRect.width * 0.6) && // right 40% of field
+        btnRect.right <= fieldRect.right + 50; // within or just outside field's right edge
+      
+      if (isInBottomRight) {
+        // Calculate how much space this button takes from the right
+        const buttonOffsetFromRight = fieldRect.right - btnRect.left + 8; // 8px gap
+        maxOffset = Math.max(maxOffset, buttonOffsetFromRight);
+      }
+    });
+    
+    return maxOffset;
   }
 
   show() {
@@ -483,8 +565,8 @@ class Toolbar {
       </div>
     `;
 
-    // Position near trigger
-    this.element.style.position = 'absolute';
+    // Use fixed positioning to prevent affecting page layout
+    this.element.style.position = 'fixed';
     this.element.style.zIndex = '10001';
     
     document.body.appendChild(this.element);
@@ -515,11 +597,12 @@ class Toolbar {
     const rect = this.triggerElement.getBoundingClientRect();
     const toolbarWidth = this.element.offsetWidth || 320;
     
+    // Use fixed positioning (viewport coordinates, no scroll offset needed)
     // Position to the LEFT of the trigger icon (since it's bottom-right corner)
-    this.element.style.left = `${rect.left + window.scrollX - toolbarWidth - 10}px`;
+    this.element.style.left = `${rect.left - toolbarWidth - 10}px`;
     
     // Align vertically with the trigger
-    this.element.style.top = `${rect.top + window.scrollY}px`;
+    this.element.style.top = `${rect.top}px`;
   }
 
   async handleAction(action) {

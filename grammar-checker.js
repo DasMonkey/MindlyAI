@@ -82,16 +82,24 @@ class GrammarChecker {
       return this.checkCache.get(cacheKey);
     }
 
-    const prompt = `You are a grammar and spelling checker. Check this text carefully and return ONLY errors where the correction is different from the original.
+    const prompt = `You are a grammar and spelling checker. Check this text carefully and return ALL errors at once (both spelling AND grammar).
 
 Return a JSON array in this exact format:
 [{"error": "the wrong text", "correction": "the correct text", "type": "grammar" or "spelling", "message": "brief explanation"}]
 
-IMPORTANT:
+IMPORTANT RULES:
+- Check for BOTH spelling and grammar errors in the SAME analysis
+- Return ALL errors found, even if they are in the same sentence
+- If a sentence has both spelling AND grammar errors, include BOTH separately
 - Only include errors where correction is DIFFERENT from the error text
+- For grammar errors that depend on spelling, show the final corrected version
 - Skip punctuation-only changes unless grammatically necessary
 - If no real errors exist, return empty array: []
-- Return ONLY valid JSON, no explanations
+- Return ONLY valid JSON, no explanations or markdown
+
+Examples:
+- Input: "He dont like apples"
+  Output: [{"error": "dont", "correction": "doesn't", "type": "spelling", "message": "Missing apostrophe"}, {"error": "dont like", "correction": "doesn't like", "type": "grammar", "message": "Subject-verb agreement"}]
 
 Text to check:
 ${text}
@@ -100,16 +108,26 @@ JSON response:`;
 
     try {
       const response = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          action: 'grammarCheck',
-          prompt: prompt
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          resolve(response);
-        });
+        // Check if extension context is still valid before sending message
+        if (!chrome.runtime?.id) {
+          reject(new Error('Extension context invalidated'));
+          return;
+        }
+        
+        try {
+          chrome.runtime.sendMessage({
+            action: 'grammarCheck',
+            prompt: prompt
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            resolve(response);
+          });
+        } catch (e) {
+          reject(new Error('Could not establish connection'));
+        }
       });
 
       if (response?.result) {
@@ -157,7 +175,15 @@ JSON response:`;
         return errors;
       }
     } catch (error) {
-      console.error('Grammar check error:', error);
+      // Silently ignore extension context invalidation errors (happens on reload)
+      const isExpectedError = 
+        error.message === 'Extension context invalidated' ||
+        error.message?.includes('Could not establish connection') ||
+        error.message?.includes('Receiving end does not exist');
+      
+      if (!isExpectedError) {
+        console.error('Grammar check error:', error);
+      }
       return [];
     }
 
@@ -224,14 +250,15 @@ class FieldChecker {
     this.overlay = document.createElement('div');
     this.overlay.className = 'grammar-overlay';
     this.overlay.style.cssText = `
-      position: absolute;
-      top: ${fieldRect.top + window.scrollY}px;
-      left: ${fieldRect.left + window.scrollX}px;
+      position: fixed;
+      top: ${fieldRect.top}px;
+      left: ${fieldRect.left}px;
       width: ${fieldRect.width}px;
       height: ${fieldRect.height}px;
       pointer-events: none;
       z-index: 9999;
       overflow: hidden;
+      clip-path: inset(0);
     `;
 
     // For each error, find its position and add an underline
@@ -244,23 +271,95 @@ class FieldChecker {
 
     document.body.appendChild(this.overlay);
 
-    // Update overlay position on scroll
+    // Update overlay position on scroll (page scroll or field internal scroll)
     const updatePosition = () => {
       const newRect = this.field.getBoundingClientRect();
       if (this.overlay) {
-        this.overlay.style.top = `${newRect.top + window.scrollY}px`;
-        this.overlay.style.left = `${newRect.left + window.scrollX}px`;
+        this.overlay.style.top = `${newRect.top}px`;
+        this.overlay.style.left = `${newRect.left}px`;
+        this.overlay.style.width = `${newRect.width}px`;
+        this.overlay.style.height = `${newRect.height}px`;
+        
+        // Recalculate underline positions when field scrolls internally
+        this.updateUnderlinePositions();
       }
     };
 
+    // Listen to field's internal scroll
+    this.field.addEventListener('scroll', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
 
     // Store cleanup function
     this.overlay._cleanup = () => {
+      this.field.removeEventListener('scroll', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
+  }
+
+  updateUnderlinePositions() {
+    // Recalculate all underline positions relative to current field state
+    if (!this.overlay) return;
+    
+    const underlines = this.overlay.querySelectorAll('.grammar-underline');
+    const fieldRect = this.field.getBoundingClientRect();
+    
+    underlines.forEach(underline => {
+      const errorData = JSON.parse(underline.dataset.error);
+      const text = this.getFieldText();
+      const errorIndex = text.indexOf(errorData.error);
+      
+      if (errorIndex === -1) {
+        // Error text no longer exists, hide underline
+        underline.style.display = 'none';
+        return;
+      }
+      
+      // Get new position
+      let errorRect;
+      if (this.field.contentEditable === 'true') {
+        const range = this.getRangeForError(errorIndex, errorData.error.length);
+        if (range) {
+          errorRect = range.getBoundingClientRect();
+        }
+      } else {
+        errorRect = this.getMirrorRect(errorIndex, errorData.error.length);
+      }
+      
+      if (errorRect) {
+        // Update position relative to overlay (which is fixed to field bounds)
+        underline.style.left = `${errorRect.left - fieldRect.left}px`;
+        underline.style.top = `${errorRect.top - fieldRect.top}px`;
+        underline.style.width = `${errorRect.width}px`;
+        underline.style.height = `${errorRect.height}px`;
+        underline.style.display = 'block';
+      }
+    });
+  }
+  
+  getRangeForError(startIndex, length) {
+    if (this.field.contentEditable !== 'true') return null;
+    
+    const nodes = this.getAllNodes(this.field);
+    let currentIndex = 0;
+    
+    for (let node of nodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const nodeLength = node.textContent.length;
+        if (currentIndex + nodeLength > startIndex) {
+          const range = document.createRange();
+          const offsetInNode = startIndex - currentIndex;
+          range.setStart(node, offsetInNode);
+          range.setEnd(node, Math.min(offsetInNode + length, nodeLength));
+          return range;
+        }
+        currentIndex += nodeLength;
+      } else if (node.nodeName === 'BR') {
+        currentIndex += 1;
+      }
+    }
+    return null;
   }
 
   addUnderline(error, startIndex) {
@@ -551,6 +650,36 @@ class SuggestionPopup {
     this.field.dispatchEvent(new Event('input', { bubbles: true }));
     this.field.dispatchEvent(new Event('change', { bubbles: true }));
 
+    // Get the field checker
+    const checker = this.grammarChecker.attachedFields.get(this.field);
+    
+    // IMMEDIATELY remove the underline for this specific error AND any overlapping errors
+    if (checker && checker.overlay) {
+      const underlines = checker.overlay.querySelectorAll('.grammar-underline');
+      const fixedText = this.error.error;
+      
+      underlines.forEach(underline => {
+        const errorData = JSON.parse(underline.dataset.error);
+        
+        // Remove if:
+        // 1. Exact match: errorData.error === this.error.error
+        // 2. Overlapping: the error contains or is contained by the fixed text
+        const shouldRemove = 
+          errorData.error === fixedText ||
+          errorData.error.includes(fixedText) ||
+          fixedText.includes(errorData.error);
+        
+        if (shouldRemove) {
+          underline.remove();
+        }
+      });
+      
+      // If no more underlines, remove the overlay entirely
+      if (checker.overlay.querySelectorAll('.grammar-underline').length === 0) {
+        checker.removeOverlay();
+      }
+    }
+
     // Show success feedback
     const btn = this.element.querySelector('[data-action="apply"]');
     btn.textContent = '✓ Applied';
@@ -559,8 +688,7 @@ class SuggestionPopup {
     setTimeout(() => {
       this.grammarChecker.hideSuggestionPopup();
       
-      // Re-check the field
-      const checker = this.grammarChecker.attachedFields.get(this.field);
+      // Re-check the field after a delay (in case there are other errors)
       if (checker) {
         checker.scheduleCheck();
       }

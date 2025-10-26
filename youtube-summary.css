@@ -1,0 +1,379 @@
+/* YouTube Video Summary Feature Styles */
+/* Matches native YouTube design system */
+
+#yt-ai-summary-panel {
+  background: #0f0f0f;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-family: "Roboto", "Arial", sans-serif;
+  transition: all 0.2s ease;
+}
+
+#yt-ai-summary-panel:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Header */
+.yt-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #272727;
+  cursor: pointer;
+  user-select: none;
+}
+
+.yt-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.yt-summary-icon {
+  font-size: 16px;
+  animation: sparkle 2s infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.yt-summary-collapse {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.yt-summary-collapse:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Content Area */
+.yt-summary-content {
+  padding: 16px;
+}
+
+/* Button Grid */
+.yt-summary-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.yt-summary-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #272727;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.yt-summary-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+
+.yt-summary-btn:hover::before {
+  transform: translateX(100%);
+}
+
+.yt-summary-btn:hover {
+  background: #3e3e3e;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.yt-summary-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.yt-btn-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.yt-btn-text {
+  flex: 1;
+  text-align: left;
+}
+
+/* Loading State */
+.yt-summary-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 12px;
+}
+
+.yt-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #272727;
+  border-top-color: #3ea6ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.yt-loading-text {
+  color: #aaa;
+  font-size: 13px;
+}
+
+/* Result Display */
+.yt-summary-result {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 12px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.yt-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #272727;
+}
+
+.yt-result-title {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.yt-result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.yt-result-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.yt-result-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.yt-result-content {
+  color: #ccc;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3e3e3e #1a1a1a;
+}
+
+.yt-result-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.yt-result-content::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.yt-result-content::-webkit-scrollbar-thumb {
+  background: #3e3e3e;
+  border-radius: 4px;
+}
+
+.yt-result-content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+.yt-result-content p {
+  margin: 0 0 12px 0;
+}
+
+.yt-result-content p:last-child {
+  margin-bottom: 0;
+}
+
+.yt-result-content strong {
+  color: #fff;
+  font-weight: 500;
+}
+
+.yt-result-content em {
+  color: #3ea6ff;
+  font-style: normal;
+}
+
+/* Clickable Timestamps */
+.yt-timestamp {
+  color: #3ea6ff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.yt-timestamp:hover {
+  color: #6fc1ff;
+  text-decoration: underline;
+}
+
+/* Error State */
+.yt-summary-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  border-radius: 8px;
+  margin-top: 12px;
+  animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.yt-error-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.yt-error-text {
+  color: #f44336;
+  font-size: 13px;
+  flex: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 1280px) {
+  .yt-summary-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Theater Mode Adjustments */
+@media (min-width: 1280px) and (max-width: 1750px) {
+  #yt-ai-summary-panel {
+    margin-bottom: 12px;
+  }
+  
+  .yt-summary-content {
+    padding: 12px;
+  }
+  
+  .yt-summary-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* Dark Mode Compatibility */
+@media (prefers-color-scheme: dark) {
+  #yt-ai-summary-panel {
+    background: #0f0f0f;
+  }
+  
+  .yt-summary-header {
+    background: #272727;
+  }
+}
+
+/* Accessibility */
+.yt-summary-btn:focus-visible,
+.yt-summary-collapse:focus-visible,
+.yt-result-btn:focus-visible {
+  outline: 2px solid #3ea6ff;
+  outline-offset: 2px;
+}
+
+/* Animation for collapsed state */
+.yt-summary-content {
+  transition: all 0.3s ease;
+  transform-origin: top;
+}
+
+/* Prevent text selection on buttons */
+.yt-summary-btn,
+.yt-summary-collapse,
+.yt-result-btn {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+
+/* Loading state for buttons */
+.yt-summary-btn.loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.yt-summary-btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  right: 12px;
+}

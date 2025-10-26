@@ -4,6 +4,70 @@ let apiKey = null;
 let pageContent = null;
 let chatHistory = [];
 
+// PDF Page Management
+let pdfMode = {
+  isActive: false,
+  currentTab: null,
+  capturedPages: [],  // Array of {pageNum, text, timestamp, charCount}
+  userViewingPage: null,
+  lastLoadedPage: null,
+  contextMode: 'accumulate',  // 'single', 'accumulate', 'sliding'
+  slidingWindowSize: 3
+};
+
+// Show PDF Page Number Modal
+function showPDFPageModal() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('pdfPageModal');
+    const input = document.getElementById('pdfPageInput');
+    const confirmBtn = document.getElementById('pdfPageConfirm');
+    const cancelBtn = document.getElementById('pdfPageCancel');
+    
+    // Reset and show modal
+    input.value = '1';
+    modal.style.display = 'flex';
+    
+    // Focus on input
+    setTimeout(() => input.focus(), 100);
+    
+    // Handle confirm
+    const handleConfirm = () => {
+      const pageNum = parseInt(input.value) || 1;
+      modal.style.display = 'none';
+      cleanup();
+      resolve(pageNum);
+    };
+    
+    // Handle cancel
+    const handleCancel = () => {
+      modal.style.display = 'none';
+      cleanup();
+      resolve(1); // Default to page 1
+    };
+    
+    // Handle Enter key
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter') {
+        handleConfirm();
+      } else if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+    
+    // Cleanup function
+    const cleanup = () => {
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      input.removeEventListener('keypress', handleKeyPress);
+    };
+    
+    // Add event listeners
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    input.addEventListener('keypress', handleKeyPress);
+  });
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   await loadApiKey();
@@ -13,9 +77,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadBookmarks();
   await loadHistory();
   await loadClipboardHistory();
+  await loadPDFModeFromStorage();
   setupEventListeners();
   checkApiStatus();
   startClipboardMonitoring();
+  updatePDFStatusBanner();  // Update UI if PDF mode was saved
 });
 
 // Load API key from storage
@@ -311,12 +377,36 @@ async function loadTTSSettings() {
 }
 
 // Switch tabs
-function switchTab(tabName) {
+async function switchTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   
   document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
   document.getElementById(`${tabName}Tab`).classList.add('active');
+  
+  // Check the current tab and update PDF banner visibility
+  if (tabName === 'chat' || tabName === 'mindy') {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]) {
+        const tab = tabs[0];
+        const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
+        
+        if (!isPDF) {
+          // Not a PDF - deactivate PDF mode and hide banner
+          pdfMode.isActive = false;
+          updatePDFStatusBanner();
+        } else {
+          // PDF - activate PDF mode and show banner
+          pdfMode.isActive = true;
+          pdfMode.currentTab = tab;
+          updatePDFStatusBanner();
+        }
+      }
+    } catch (error) {
+      console.log('Could not check current tab:', error);
+    }
+  }
 }
 
 // Display current task
@@ -351,7 +441,9 @@ async function generateContent(task) {
     document.getElementById('actionButtons').style.display = 'flex';
   } catch (error) {
     console.error('Error generating content:', error);
-    showResult(`❌ Error: ${error.message}`, 'error');
+    console.error('Error stack:', error.stack);
+    const errorMessage = error.message || 'Unknown error occurred';
+    showResult(`❌ Error: ${errorMessage}`, 'error');
   }
   
   showLoading(false);
@@ -379,7 +471,7 @@ ${task.content}`,
     
     'translate-selection': `Please translate the following text to ${langName}:\n\n${task.content}`,
     
-    'mindmap': `Create a detailed mindmap structure for the following content. Format it as a hierarchical list with main topics and subtopics. Use clear indentation and bullet points:\n\n${task.content}\n\nFormat the mindmap with:\n- Main Topic\n  - Subtopic 1\n    - Detail 1\n    - Detail 2\n  - Subtopic 2`,
+    'mindmap': `Create a visual mindmap for the following content. Format it as a centered, branching structure with a main topic in the center (use 🎯 emoji), major branches (use ⭐ emoji), and sub-branches (use • emoji). Make it visually distinct and easy to scan:\n\n${task.content}\n\nFormat example:\n\n🎯 Main Topic\n   │\n   ├─⭐ Major Branch 1\n   │   • Sub-point 1\n   │   • Sub-point 2\n   │\n   ├─⭐ Major Branch 2\n   │   • Sub-point 1\n   │\n   └─⭐ Major Branch 3\n       • Sub-point 1`,
     
     'social-content': `Create viral social media content based on the following webpage. Generate posts for Twitter/X, LinkedIn, and Instagram. Each post should have:\n1. A catchy hook\n2. Main content with value\n3. Call to action\n4. Relevant hashtags\n\nSource content:\n${task.content}\n\nURL: ${task.url}`
   };
@@ -389,7 +481,8 @@ ${task.content}`,
 
 // Call Gemini API
 async function callGeminiApi(prompt, imageParts = null) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  // Use latest lite model
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent?key=${apiKey}`;
   
   // Build parts array
   let parts = [];
@@ -398,6 +491,8 @@ async function callGeminiApi(prompt, imageParts = null) {
   } else {
     parts = [{ text: prompt }];
   }
+  
+  console.log('📤 Calling Gemini API with prompt length:', prompt.length);
   
   const response = await fetch(url, {
     method: 'POST',
@@ -425,14 +520,509 @@ async function callGeminiApi(prompt, imageParts = null) {
   
   const data = await response.json();
   console.log('API Response:', data);
+  console.log('API Response structure check:', {
+    hasCandidates: !!data.candidates,
+    candidatesLength: data.candidates?.length,
+    hasFirstCandidate: !!data.candidates?.[0],
+    hasContent: !!data.candidates?.[0]?.content,
+    hasParts: !!data.candidates?.[0]?.content?.parts,
+    partsLength: data.candidates?.[0]?.content?.parts?.length
+  });
   
   // Check if response has expected structure
-  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+  if (!data.candidates || !data.candidates[0]) {
     console.error('Unexpected API response structure:', data);
-    throw new Error('API returned unexpected response format');
+    throw new Error('API returned unexpected response format: missing candidates');
+  }
+  
+  const candidate = data.candidates[0];
+  if (!candidate.content) {
+    console.error('Unexpected API response structure:', data);
+    throw new Error('API returned unexpected response format: missing content');
+  }
+  
+  if (!candidate.content.parts || candidate.content.parts.length === 0) {
+    console.error('Unexpected API response structure:', data);
+    // Check if content was filtered or blocked
+    if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'RECITATION') {
+      throw new Error(`Content blocked: ${candidate.finishReason}. Please try with different content.`);
+    }
+    throw new Error('API returned unexpected response format: missing parts');
+  }
+  
+  // Check if parts[0] exists and has text property
+  if (!candidate.content.parts[0]) {
+    console.error('Unexpected API response structure:', data);
+    throw new Error('API returned unexpected response format: parts array is empty');
+  }
+  
+  // Check for text content
+  const text = candidate.content.parts[0].text;
+  if (!text) {
+    console.error('Unexpected API response structure:', data);
+    console.error('parts[0]:', candidate.content.parts[0]);
+    throw new Error('API returned unexpected response format: text content is missing');
+  }
+  
+  return text;
+}
+
+// Call Gemini API with vision (multimodal) support
+async function callGeminiVisionApi(prompt, imageBase64) {
+  if (!apiKey) {
+    throw new Error('API key not configured');
+  }
+  
+  console.log('📤 Calling Gemini Vision API');
+  console.log('Prompt:', prompt.substring(0, 100) + '...');
+  console.log('Image data length:', imageBase64.length);
+  
+  // Remove data URL prefix if present
+  const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: 'image/png',
+              data: base64Data
+            }
+          }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.2,  // Lower temperature for more accurate OCR
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: 8192  // Larger output for long documents
+      }
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    console.error('Vision API Error Response:', error);
+    throw new Error(error.error?.message || `Vision API request failed: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  console.log('✅ Vision API Response received');
+  
+  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+    console.error('Unexpected Vision API response structure:', data);
+    throw new Error('Vision API returned unexpected response format');
   }
   
   return data.candidates[0].content.parts[0].text;
+}
+
+// Extract PDF page content using OCR
+async function extractPDFPageWithOCR(tabId, pageNumber = null) {
+  try {
+    console.log('📸 Capturing PDF page screenshot...');
+    
+    // Get current page number from the PDF viewer if not provided
+    if (!pageNumber) {
+      try {
+        const pageResults = await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          function: () => {
+            // Try PDF.js viewer (works with Firefox PDF viewer and custom viewers)
+            if (window.PDFViewerApplication && window.PDFViewerApplication.pdfViewer) {
+              const pageNum = window.PDFViewerApplication.pdfViewer.currentPageNumber;
+              console.log('✅ Found page via PDFViewerApplication.pdfViewer:', pageNum);
+              return { page: pageNum, method: 'pdfjs' };
+            }
+            
+            // Chrome's native viewer doesn't expose page numbers to extensions
+            console.log('⚠️ Chrome native PDF viewer detected - cannot auto-detect page');
+            return { page: null, method: 'chrome-native' };
+          }
+        });
+        const result = pageResults[0]?.result;
+        
+        // For Chrome's native viewer, always ask user
+        if (!result || !result.page || result.method === 'chrome-native') {
+          pageNumber = await showPDFPageModal();
+          console.log('👤 User entered page number:', pageNumber);
+        } else {
+          pageNumber = result.page;
+          console.log(`✅ Page detected via ${result.method}:`, pageNumber);
+        }
+      } catch (e) {
+        console.log('Could not detect page number, asking user:', e.message);
+        pageNumber = await showPDFPageModal();
+      }
+    }
+    
+    console.log('📄 Detected page number:', pageNumber);
+    
+    // Capture the visible tab as screenshot
+    const dataUrl = await new Promise((resolve, reject) => {
+      chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(dataUrl);
+        }
+      });
+    });
+    
+    console.log('✅ Screenshot captured, size:', dataUrl.length);
+    
+    // Use Gemini Vision API to extract text from screenshot
+    const prompt = `Extract all text from this PDF page. Return only the text content, maintaining paragraph structure and formatting. Be thorough and accurate.`;
+    
+    const extractedText = await callGeminiVisionApi(prompt, dataUrl);
+    
+    console.log('✅ OCR extraction complete, length:', extractedText.length);
+    
+    // Apply context limit safeguards
+    const maxChars = 10000;
+    const truncated = extractedText.length > maxChars;
+    const finalText = truncated ? extractedText.substring(0, maxChars) : extractedText;
+    
+    if (truncated) {
+      console.warn(`⚠️ Extracted text is large (${extractedText.length} chars), truncating to ${maxChars}`);
+    }
+    
+    return {
+      text: finalText,
+      truncated: truncated,
+      originalLength: extractedText.length,
+      pageNumber: pageNumber,
+      timestamp: Date.now(),
+      charCount: finalText.length
+    };
+  } catch (error) {
+    console.error('❌ PDF OCR extraction error:', error);
+    throw error;
+  }
+}
+
+// PDF Page Management Functions
+
+// Add captured page to PDF mode
+function addCapturedPage(pageData) {
+  // Check if page already exists
+  const existingIndex = pdfMode.capturedPages.findIndex(p => p.pageNumber === pageData.pageNumber);
+  
+  if (existingIndex >= 0) {
+    // Update existing page
+    pdfMode.capturedPages[existingIndex] = pageData;
+    console.log(`📄 Updated page ${pageData.pageNumber} in captured pages`);
+  } else {
+    // Add new page
+    pdfMode.capturedPages.push(pageData);
+    console.log(`📄 Added page ${pageData.pageNumber} to captured pages`);
+  }
+  
+  // Sort by page number
+  pdfMode.capturedPages.sort((a, b) => a.pageNumber - b.pageNumber);
+  
+  pdfMode.lastLoadedPage = pageData.pageNumber;
+  
+  // Save to storage
+  savePDFModeToStorage();
+  
+  // Update UI
+  updatePDFStatusBanner();
+}
+
+// Build context based on selected mode
+function buildPDFContext() {
+  if (pdfMode.capturedPages.length === 0) {
+    return 'No PDF pages captured yet.';
+  }
+  
+  let pages = [];
+  
+  switch (pdfMode.contextMode) {
+    case 'single':
+      // Only the last loaded page
+      pages = pdfMode.capturedPages.filter(p => p.pageNumber === pdfMode.lastLoadedPage);
+      break;
+      
+    case 'accumulate':
+      // All captured pages
+      pages = pdfMode.capturedPages;
+      break;
+      
+    case 'sliding':
+      // Last N pages
+      pages = pdfMode.capturedPages.slice(-pdfMode.slidingWindowSize);
+      break;
+  }
+  
+  if (pages.length === 0) {
+    return 'No PDF pages in current context mode.';
+  }
+  
+  // Build context string
+  let context = `PDF Document (${pdfMode.contextMode === 'single' ? 'Page ' + pages[0].pageNumber : pages.length + ' pages'})\n\n`;
+  
+  pages.forEach((page, idx) => {
+    if (pages.length > 1) {
+      context += `--- Page ${page.pageNumber} ---\n`;
+    }
+    context += page.text;
+    if (idx < pages.length - 1) {
+      context += '\n\n';
+    }
+  });
+  
+  // Add metadata
+  const totalChars = pages.reduce((sum, p) => sum + p.charCount, 0);
+  const estimatedTokens = Math.ceil(totalChars / 4); // Rough estimate: 4 chars per token
+  
+  if (pdfMode.contextMode !== 'single') {
+    context += `\n\n[Context: ${pages.length} page(s), ~${estimatedTokens} tokens]`;
+  }
+  
+  return context;
+}
+
+// Calculate total token usage
+function calculatePDFTokens() {
+  const totalChars = pdfMode.capturedPages.reduce((sum, p) => sum + p.charCount, 0);
+  return Math.ceil(totalChars / 4); // Rough estimate
+}
+
+// Clear captured pages
+function clearCapturedPages(pageNumber = null) {
+  if (pageNumber) {
+    // Clear specific page
+    pdfMode.capturedPages = pdfMode.capturedPages.filter(p => p.pageNumber !== pageNumber);
+    console.log(`🗑️ Cleared page ${pageNumber}`);
+  } else {
+    // Clear all pages
+    pdfMode.capturedPages = [];
+    pdfMode.lastLoadedPage = null;
+    console.log('🗑️ Cleared all captured pages');
+  }
+  
+  savePDFModeToStorage();
+  updatePDFStatusBanner();
+}
+
+// Save PDF mode state to storage
+function savePDFModeToStorage() {
+  chrome.storage.local.set({ pdfMode: pdfMode }, () => {
+    console.log('💾 PDF mode saved to storage');
+  });
+}
+
+// Load PDF mode state from storage
+async function loadPDFModeFromStorage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['pdfMode'], (result) => {
+      if (result.pdfMode) {
+        pdfMode = result.pdfMode;
+        console.log('📂 Loaded PDF mode from storage:', pdfMode);
+      }
+      resolve();
+    });
+  });
+}
+
+// Update PDF status banner UI
+function updatePDFStatusBanner() {
+  if (!pdfMode.isActive) {
+    // Hide banners if not in PDF mode
+    document.getElementById('pdfStatusBannerChat').style.display = 'none';
+    document.getElementById('pdfStatusBannerMindy').style.display = 'none';
+    return;
+  }
+  
+  // Save current input value before regenerating HTML
+  const currentInputValue = document.getElementById('pdfPageNumberInput')?.value || '1';
+  
+  // Build banner HTML
+  const capturedPagesList = pdfMode.capturedPages.map(p => p.pageNumber).join(', ');
+  const totalPages = pdfMode.capturedPages.length;
+  const tokens = calculatePDFTokens();
+  const maxTokens = 128000; // Gemini 2.0 Flash limit
+  const tokenPercent = (tokens / maxTokens) * 100;
+  
+  let bannerHTML = `
+    <div class="pdf-banner-header">
+      <div class="pdf-banner-title">
+        📄 PDF Mode Active
+      </div>
+    </div>
+    
+    <div class="pdf-banner-info">
+      <div class="pdf-banner-info-item">
+        <strong>Pages Captured:</strong> ${totalPages} ${totalPages === 0 ? '(none yet)' : `(${capturedPagesList})`}
+      </div>
+    </div>
+  `;
+  
+  if (totalPages > 0) {
+    bannerHTML += `
+      <div class="pdf-banner-pages">
+        ${pdfMode.capturedPages.map(page => `
+          <div class="pdf-page-badge ${page.pageNumber === pdfMode.lastLoadedPage ? 'active' : ''}" data-page="${page.pageNumber}">
+            Page ${page.pageNumber}
+            <span class="pdf-page-badge-close" data-page="${page.pageNumber}">×</span>
+          </div>
+        `).join('')}
+      </div>
+      
+      <div class="pdf-banner-controls">
+        <div class="pdf-capture-group">
+          <button class="pdf-banner-btn primary" id="pdfRecaptureBtn">
+            Capture Page
+          </button>
+          <input type="number" class="pdf-page-input" id="pdfPageNumberInput" placeholder="Page #" min="1" value="1" />
+        </div>
+        <button class="pdf-banner-btn" id="pdfClearAllBtn">
+          🗑️ Clear All
+        </button>
+      </div>
+      
+      <div class="pdf-token-usage">
+        <div>Token Usage: ~${tokens.toLocaleString()} / ${maxTokens.toLocaleString()} (${tokenPercent.toFixed(1)}%)</div>
+        <div class="pdf-token-bar">
+          <div class="pdf-token-fill ${tokenPercent > 80 ? 'danger' : tokenPercent > 60 ? 'warning' : ''}" style="width: ${Math.min(100, tokenPercent)}%"></div>
+        </div>
+      </div>
+    `;
+  } else {
+    bannerHTML += `
+      <div class="pdf-banner-controls">
+        <div class="pdf-capture-group">
+          <button class="pdf-banner-btn primary" id="pdfRecaptureBtn">
+            Capture Page
+          </button>
+          <input type="number" class="pdf-page-input" id="pdfPageNumberInput" placeholder="Page #" min="1" value="1" />
+        </div>
+      </div>
+    `;
+  }
+  
+  // Update both banners
+  document.getElementById('pdfStatusBannerChat').innerHTML = bannerHTML;
+  document.getElementById('pdfStatusBannerMindy').innerHTML = bannerHTML;
+  document.getElementById('pdfStatusBannerChat').style.display = 'block';
+  document.getElementById('pdfStatusBannerMindy').style.display = 'block';
+  
+  // Restore the input value after HTML regeneration
+  const restoredInputs = document.querySelectorAll('#pdfPageNumberInput');
+  restoredInputs.forEach(input => {
+    input.value = currentInputValue;
+  });
+  
+  // Add event listeners after HTML is inserted (CSP-compliant, no inline onclick)
+  const setupBannerListeners = (bannerId) => {
+    const banner = document.getElementById(bannerId);
+    if (!banner) return;
+    
+    // Recapture button - pass the banner reference so it can find the correct input
+    const recaptureBtn = banner.querySelector('#pdfRecaptureBtn');
+    if (recaptureBtn) {
+      recaptureBtn.addEventListener('click', () => recapturePDFPage(banner));
+    }
+    
+    // Clear all button
+    const clearAllBtn = banner.querySelector('#pdfClearAllBtn');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', () => clearCapturedPages());
+    }
+    
+    // Page badge close buttons
+    banner.querySelectorAll('.pdf-page-badge-close').forEach(closeBtn => {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Don't trigger page badge click
+        const pageNum = parseInt(e.currentTarget.getAttribute('data-page'));
+        clearCapturedPages(pageNum);
+      });
+    });
+  };
+  
+  setupBannerListeners('pdfStatusBannerChat');
+  setupBannerListeners('pdfStatusBannerMindy');
+}
+
+// Recapture PDF page
+async function recapturePDFPage(bannerElement) {
+  if (!pdfMode.currentTab) {
+    alert('No PDF tab found');
+    return;
+  }
+  
+  try {
+    // Get page number from inline input within the specific banner
+    const pageInput = bannerElement ? bannerElement.querySelector('#pdfPageNumberInput') : document.getElementById('pdfPageNumberInput');
+    const pageNumber = pageInput ? parseInt(pageInput.value) || 1 : 1;
+    
+    console.log('🔄 Starting recapture for tab:', pdfMode.currentTab.id);
+    console.log('📋 Banner element:', bannerElement?.id || 'none');
+    console.log('📋 Input element:', pageInput);
+    console.log('📋 Input value:', pageInput?.value);
+    console.log('📋 Parsed page number:', pageNumber);
+    
+    // Hide popup
+    await chrome.scripting.executeScript({
+      target: { tabId: pdfMode.currentTab.id },
+      function: () => {
+        const popup = document.getElementById('ai-assistant-popup');
+        if (popup) popup.style.display = 'none';
+      }
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Extract PDF content with specified page number
+    console.log('📸 Extracting PDF content...');
+    const result = await extractPDFPageWithOCR(pdfMode.currentTab.id, pageNumber);
+    console.log('✅ Extraction complete. Page:', result.pageNumber, 'Length:', result.charCount);
+    
+    // Update the viewing page
+    pdfMode.userViewingPage = result.pageNumber;
+    
+    addCapturedPage(result);
+    
+    // Restore popup
+    await chrome.scripting.executeScript({
+      target: { tabId: pdfMode.currentTab.id },
+      function: () => {
+        const popup = document.getElementById('ai-assistant-popup');
+        if (popup) popup.style.display = '';
+      }
+    });
+    
+    // Rebuild context
+    pageContent = buildPDFContext();
+    console.log('📄 Context rebuilt, total pages:', pdfMode.capturedPages.length);
+    
+    // Update banner
+    updatePDFStatusBanner();
+    
+    // Log success without popup
+    console.log(`✅ Page ${result.pageNumber} captured! ${result.charCount} characters. Total pages: ${pdfMode.capturedPages.length}`);
+  } catch (error) {
+    console.error('❌ Error recapturing PDF:', error);
+    // Show error in banner or status instead of popup
+  }
+}
+
+// Switch PDF context mode
+function switchPDFMode(mode) {
+  pdfMode.contextMode = mode;
+  pageContent = buildPDFContext();
+  savePDFModeToStorage();
+  updatePDFStatusBanner();
+  console.log(`Switched to ${mode} mode`);
 }
 
 // Show/hide loading
@@ -709,33 +1299,102 @@ function clearHistory() {
 
 // Load page content for chat
 async function loadPageContent() {
-  return new Promise(async (resolve) => {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'getPageContent' }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.log('Error loading page content:', chrome.runtime.lastError);
-            pageContent = 'Unable to load page content. Please refresh the page.';
-            resolve();
-          } else if (response && response.content) {
-            pageContent = response.content;
-            resolve();
-          } else {
-            pageContent = 'No content available from this page.';
-            resolve();
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) {
+      pageContent = 'No active tab found.';
+      return;
+    }
+    
+    const tab = tabs[0];
+    
+    // Check if this is a PDF
+    const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
+    
+    if (isPDF) {
+      console.log('📄 PDF detected in chat, using OCR extraction...');
+      
+      // Activate PDF mode
+      pdfMode.isActive = true;
+      pdfMode.currentTab = tab;
+    } else {
+      // Not a PDF - deactivate PDF mode
+      pdfMode.isActive = false;
+      updatePDFStatusBanner(); // Hide the banner
+    }
+    
+    if (isPDF) {
+      
+      // Hide floating popup before screenshot
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: () => {
+            const popup = document.getElementById('ai-assistant-popup');
+            if (popup) {
+              popup.style.display = 'none';
+            }
           }
         });
-      } else {
-        pageContent = 'No active tab found.';
-        resolve();
+      } catch (e) {
+        console.log('Could not hide popup:', e);
       }
-    } catch (error) {
-      console.log('Could not load page content:', error);
-      pageContent = 'Error loading page content.';
-      resolve();
+      
+      // Small delay to ensure popup is hidden
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Extract PDF content using OCR
+      const result = await extractPDFPageWithOCR(tab.id);
+      
+      // Add to captured pages
+      addCapturedPage(result);
+      
+      // Restore popup
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: () => {
+            const popup = document.getElementById('ai-assistant-popup');
+            if (popup) {
+              popup.style.display = '';
+            }
+          }
+        });
+      } catch (e) {
+        console.log('Could not restore popup:', e);
+      }
+      
+      // Build context based on mode
+      pageContent = buildPDFContext();
+      
+      console.log('✅ PDF content loaded for chat, length:', pageContent.length);
+      
+      // Update UI banner
+      updatePDFStatusBanner();
+      
+      return;
     }
-  });
+    
+    // Regular webpage - use message passing to content script
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('Error loading page content:', chrome.runtime.lastError);
+          pageContent = 'Unable to load page content. Please refresh the page.';
+          resolve();
+        } else if (response && response.content) {
+          pageContent = response.content;
+          resolve();
+        } else {
+          pageContent = 'No content available from this page.';
+          resolve();
+        }
+      });
+    });
+  } catch (error) {
+    console.log('Could not load page content:', error);
+    pageContent = 'Error loading page content.';
+  }
 }
 
 // Send chat message
@@ -1511,26 +2170,13 @@ async function explainImage(imageUrl) {
       }
     }];
     
-    // Call Gemini with detailed explanation prompt
-    const prompt = `Analyze and explain this image in detail. Provide:
+    // Call Gemini with concise TLDR-style prompt
+    const prompt = `Provide a concise TLDR description of this image in 2-3 sentences. Focus on:
+- What is it? (main subject/content)
+- Key visual elements or data (if applicable)
+- Purpose or main message
 
-1. **Alt-Text Description**: A concise, accessible description suitable for screen readers (1-2 sentences)
-
-2. **Detailed Explanation**: What the image shows, including:
-   - Main subject/content
-   - Important visual elements
-   - Colors, composition, and style
-   - Context and setting
-
-3. **Purpose/Message**: What the image is trying to communicate or represent
-
-4. **Additional Insights**: 
-   - If it's a chart/graph: Explain the data, trends, and key findings
-   - If it's a diagram: Explain the components and relationships
-   - If it's a photo: Describe the scene, mood, and notable details
-   - If it's an infographic: Summarize the key information presented
-
-Format your response with clear sections and bullet points where appropriate.`;
+Keep it brief and informative, like a quick summary for someone who can't see the image.`;
     
     const result = await callGeminiApi(prompt, imageParts);
     
@@ -1738,7 +2384,7 @@ async function startMindyCall() {
       // Send setup message (format per official Gemini Live API docs)
       const setupMessage = {
         setup: {
-          model: 'models/gemini-2.0-flash-exp',
+          model: 'models/gemini-2.5-flash-native-audio-preview-09-2025',
           generationConfig: {
             responseModalities: ['AUDIO'],
             speechConfig: {
@@ -1884,47 +2530,72 @@ function handleMindyMessage(message) {
       return;  // Skip processing rest of message
     }
 
-    // Handle input transcription (what you said) - accumulate until turn complete
+    // Handle input transcription (what you said) - show live
     if (serverContent.inputTranscription && serverContent.inputTranscription.text) {
-      currentUserTranscript += ' ' + serverContent.inputTranscription.text;
-      console.log('🎤 User transcript building:', currentUserTranscript);
+      const newText = serverContent.inputTranscription.text.trim();
+      if (newText) {
+        // Only add space if we already have text
+        if (currentUserTranscript) {
+          currentUserTranscript += ' ' + newText;
+        } else {
+          currentUserTranscript = newText;
+        }
+        console.log('🎤 User transcript building:', currentUserTranscript);
+        // Update live transcript display
+        updateLiveTranscript('user', currentUserTranscript.trim());
+      }
     }
     
-    // Handle output transcription (what AI said) - accumulate until turn complete
+    // Handle output transcription (what AI said) - show live
     if (serverContent.outputTranscription && serverContent.outputTranscription.text) {
-      currentAITranscript += ' ' + serverContent.outputTranscription.text;
-      console.log('🔊 AI transcript building:', currentAITranscript);
+      const newText = serverContent.outputTranscription.text.trim();
+      if (newText) {
+        // Only add space if we already have text
+        if (currentAITranscript) {
+          currentAITranscript += ' ' + newText;
+        } else {
+          currentAITranscript = newText;
+        }
+        console.log('🔊 AI transcript building:', currentAITranscript);
+        // Update live transcript display
+        updateLiveTranscript('ai', currentAITranscript.trim());
+      }
     }
 
     // Handle audio output
     if (serverContent.modelTurn && serverContent.modelTurn.parts) {
       console.log('🔊 Model turn with', serverContent.modelTurn.parts.length, 'parts');
+      
+      // Only process audio if we're not already speaking to prevent overlapping
+      let hasNewAudio = false;
       for (const part of serverContent.modelTurn.parts) {
         console.log('Part type:', Object.keys(part));
-        if (part.inlineData) {
-          console.log('🎵 Audio data received, MIME:', part.inlineData.mimeType);
+        if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.includes('audio')) {
+          console.log('🎵 Audio data received, MIME:', part.inlineData.mimeType, 'Size:', part.inlineData.data.length);
           playMindyAudio(part.inlineData.data);
-          updateMindyStatus('speaking');
+          hasNewAudio = true;
         }
+        // Note: Don't display part.text here - it's formatted text, not the transcript
+        // The actual audio transcript comes from outputTranscription
         if (part.text) {
-          console.log('💬 Text response:', part.text);
-          addMindyTranscript('ai', part.text);
+          console.log('💬 Text response received (not displaying - waiting for audio transcript):', part.text.substring(0, 100));
         }
+      }
+      
+      if (hasNewAudio) {
+        updateMindyStatus('speaking');
       }
     }
     
     if (serverContent.turnComplete) {
       console.log('✅ Turn complete');
       
-      // Display accumulated transcripts
-      if (currentUserTranscript.trim()) {
-        addMindyTranscript('user', currentUserTranscript.trim());
-        currentUserTranscript = '';  // Reset
-      }
-      if (currentAITranscript.trim()) {
-        addMindyTranscript('ai', currentAITranscript.trim());
-        currentAITranscript = '';  // Reset
-      }
+      // Finalize transcripts (remove live indicators)
+      finalizeLiveTranscripts();
+      
+      // Reset transcript accumulators
+      currentUserTranscript = '';
+      currentAITranscript = '';
       
       updateMindyStatus('listening');
     }
@@ -2041,6 +2712,17 @@ function endMindyCall() {
     mindyAudioContext = null;
   }
 
+  // Clear audio queue
+  mindyAudioQueue = [];
+  mindyIsPlayingAudio = false;
+
+  // Clear transcript accumulators
+  currentUserTranscript = '';
+  currentAITranscript = '';
+  
+  // Clear live transcript elements
+  liveTranscriptElements = { user: null, ai: null };
+
   mindyIsMuted = false;
 
   // Reset UI
@@ -2079,6 +2761,94 @@ function clearMindyInfo() {
   }
 }
 
+// Live transcript tracking
+let liveTranscriptElements = {
+  user: null,
+  ai: null
+};
+
+// Clean transcript text (remove filler words and fix broken words)
+function cleanTranscriptText(text) {
+  console.log('🧹 Original transcript:', text);
+  
+  // First, remove standalone filler words with word boundaries
+  const fillerWords = /\b(um|uh|uhh|ahh|ehh|er|hmm)\b\s*/gi;
+  let cleaned = text.replace(fillerWords, '');
+  
+  // Fix only single-letter breaks: "g a m e" -> "game", "t h e" -> "the"
+  // Match pattern: single letter + space + single letter (not full words)
+  cleaned = cleaned.replace(/\b([a-z])\s+(?=[a-z](?:\s+[a-z]|\s*\b))/gi, '$1');
+  
+  // Do multiple passes for chains like "g a m e"
+  for (let i = 0; i < 3; i++) {
+    cleaned = cleaned.replace(/\b([a-z])\s+(?=[a-z](?:\s+[a-z]|\s*\b))/gi, '$1');
+  }
+  
+  const result = cleaned
+    .replace(/\s+/g, ' ')               // Collapse multiple spaces
+    .replace(/\s+([.,!?])/g, '$1')      // Fix spacing before punctuation
+    .replace(/\s*,\s*/g, ', ')          // Normalize comma spacing  
+    .trim()                             // Remove leading/trailing spaces
+    .replace(/^[a-z]/, (c) => c.toUpperCase()); // Capitalize first letter
+  
+  console.log('✨ Cleaned transcript:', result);
+  return result;
+}
+
+// Update live transcript (streaming as speech happens)
+function updateLiveTranscript(role, text) {
+  clearMindyInfo();
+  
+  const container = document.getElementById('mindyTranscriptPanel');
+  if (!container) return;
+  
+  // Clean the transcript text
+  const cleanedText = cleanTranscriptText(text);
+  
+  // Check if we already have a live message element for this role
+  if (!liveTranscriptElements[role]) {
+    // Create new live message element
+    const message = document.createElement('div');
+    message.className = `mindy-message-panel ${role} live-transcript`;
+    message.innerHTML = `
+      <div class="mindy-message-label-panel">${role === 'user' ? 'You' : 'Mindy'} <span class="live-indicator">●</span></div>
+      <p class="mindy-message-text-panel">${cleanedText}</p>
+    `;
+    
+    container.appendChild(message);
+    liveTranscriptElements[role] = message;
+  } else {
+    // Update existing live message
+    const textElement = liveTranscriptElements[role].querySelector('.mindy-message-text-panel');
+    if (textElement) {
+      textElement.textContent = cleanedText;
+    }
+  }
+  
+  // Auto-scroll to bottom
+  container.scrollTop = container.scrollHeight;
+}
+
+// Finalize live transcripts (remove live indicator when turn completes)
+function finalizeLiveTranscripts() {
+  // Remove live indicators and mark as final
+  Object.values(liveTranscriptElements).forEach(element => {
+    if (element) {
+      element.classList.remove('live-transcript');
+      const liveIndicator = element.querySelector('.live-indicator');
+      if (liveIndicator) {
+        liveIndicator.remove();
+      }
+    }
+  });
+  
+  // Clear tracking
+  liveTranscriptElements = {
+    user: null,
+    ai: null
+  };
+}
+
 function addMindyTranscript(role, text) {
   clearMindyInfo();
   
@@ -2098,14 +2868,113 @@ function addMindyTranscript(role, text) {
 
 async function getPageContext(tab) {
   try {
+    // First check if this is a PDF by checking the URL
+    const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
+    
+    if (isPDF) {
+      console.log('📄 PDF detected, using OCR extraction...');
+      
+      // Activate PDF mode
+      pdfMode.isActive = true;
+      pdfMode.currentTab = tab;
+    } else {
+      // Not a PDF - deactivate PDF mode
+      pdfMode.isActive = false;
+      updatePDFStatusBanner(); // Hide the banner
+    }
+    
+    if (isPDF) {
+      
+      // Hide floating popup before screenshot
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: () => {
+            const popup = document.getElementById('ai-assistant-popup');
+            if (popup) {
+              popup.style.display = 'none';
+            }
+          }
+        });
+      } catch (e) {
+        console.log('Could not hide popup:', e);
+      }
+      
+      // Small delay to ensure popup is hidden
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Extract PDF content using OCR
+      // Use existing captured pages if available, or default to page 1 for Mindy calls (no prompt)
+      const existingPageNumber = pdfMode.capturedPages.length > 0 ? pdfMode.capturedPages[0].pageNumber : 1;
+      const result = await extractPDFPageWithOCR(tab.id, existingPageNumber);
+      
+      // Add to captured pages
+      addCapturedPage(result);
+      
+      // Restore popup
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: () => {
+            const popup = document.getElementById('ai-assistant-popup');
+            if (popup) {
+              popup.style.display = '';
+            }
+          }
+        });
+      } catch (e) {
+        console.log('Could not restore popup:', e);
+      }
+      
+      // Build context based on mode
+      const context = buildPDFContext();
+      
+      return context;
+    }
+    
+    // Regular webpage - execute script to get content
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       function: () => {
         const title = document.title;
         const metaDesc = document.querySelector('meta[name="description"]');
         const description = metaDesc ? metaDesc.content : '';
-        const content = document.body.innerText.substring(0, 10000);
-        return `Page Title: ${title}\n\n${description ? `Description: ${description}\n\n` : ''}Content:\n${content}`;
+        let content = document.body.innerText.substring(0, 10000);
+        
+        // Check if on YouTube and try to get transcript
+        const isYouTube = window.location.hostname.includes('youtube.com') && window.location.pathname === '/watch';
+        let transcript = '';
+        
+        if (isYouTube) {
+          // Try to access the transcript from YouTubeSummary class if available
+          if (window.youtubeTranscript) {
+            transcript = window.youtubeTranscript;
+          } else {
+            // Try to get from ytInitialPlayerResponse
+            try {
+              const scripts = document.querySelectorAll('script');
+              for (const script of scripts) {
+                const scriptContent = script.textContent;
+                if (scriptContent.includes('captionTracks')) {
+                  const match = scriptContent.match(/"captionTracks":\s*(\[\{[^\]]+\}\])/);
+                  if (match) {
+                    const tracks = JSON.parse(match[1]);
+                    const track = tracks.find(t => t.languageCode === 'en') || tracks[0];
+                    if (track?.baseUrl) {
+                      // Note: Can't fetch here due to async, but indicate transcript is available
+                      transcript = '[YouTube video with captions available - ask me about the video content]';
+                    }
+                  }
+                  break;
+                }
+              }
+            } catch (e) {
+              console.log('Could not extract transcript info');
+            }
+          }
+        }
+        
+        return `Page Title: ${title}\n\n${description ? `Description: ${description}\n\n` : ''}${transcript ? `Video Transcript Preview: ${transcript}\n\n` : ''}Content:\n${content}`;
       }
     });
     return results[0].result;
@@ -2114,3 +2983,4 @@ async function getPageContext(tab) {
     return 'Unable to retrieve page content.';
   }
 }
+
