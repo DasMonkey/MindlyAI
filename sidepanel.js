@@ -82,6 +82,11 @@ function showPDFPageModal() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  // Reset chat session tracking on sidepanel open to ensure clean state
+  chatSessionTab = { id: null, url: null };
+  currentPageTab = { id: null, url: null };
+  pageContent = null;
+  
   await loadApiKey();
   await loadTargetLanguageUI();
   await loadMindyVoiceUI();
@@ -1464,16 +1469,6 @@ async function loadPageContent() {
           resolve();
         } else if (response && response.content) {
           pageContent = response.content;
-          
-          // Initialize chat session tab on first page load
-          if (!chatSessionTab.id) {
-            chatSessionTab.id = tab.id;
-            chatSessionTab.url = tab.url;
-            currentPageTab.id = tab.id;
-            currentPageTab.url = tab.url;
-            console.log('🎯 Chat session initialized with tab:', tab.id, tab.url);
-          }
-          
           resolve();
         } else {
           pageContent = 'No content available from this page.';
@@ -1494,9 +1489,14 @@ async function checkForTabChange() {
     const newTabId = tabs[0].id;
     const newUrl = tabs[0].url;
     
-    // Only check if session has been initialized
+    // Only check if session has been initialized (chat was actually used)
     if (!chatSessionTab.id) {
-      return; // No session yet, nothing to check
+      return; // No chat session yet, button should NOT show
+    }
+    
+    // Only show button if we've actually loaded page content for chat
+    if (!pageContent) {
+      return; // No page content loaded yet, don't show button
     }
     
     // Check if this is a different tab or URL
@@ -1590,6 +1590,18 @@ async function sendChatMessage() {
       // Regular chat - load page content if not already loaded
       if (!pageContent) {
         await loadPageContent();
+      }
+      
+      // Initialize chat session ONLY when user sends first message
+      if (!chatSessionTab.id) {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]) {
+          chatSessionTab.id = tabs[0].id;
+          chatSessionTab.url = tabs[0].url;
+          currentPageTab.id = tabs[0].id;
+          currentPageTab.url = tabs[0].url;
+          console.log('🎯 Chat session initialized on first message with tab:', tabs[0].id, tabs[0].url);
+        }
       }
       
       // Build context-aware prompt

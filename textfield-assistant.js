@@ -531,13 +531,28 @@ class TriggerIcon {
     this.field.addEventListener('focus', () => this.show());
     this.field.addEventListener('mouseenter', () => this.show());
     
-    // Hide on blur (with delay), but do not change position here
+    // Hide on mouseleave - this is the key fix for the issue
+    this.field.addEventListener('mouseleave', () => {
+      // Only hide if the field doesn't have focus
+      if (document.activeElement !== this.field) {
+        this.hide();
+      }
+    });
+    
+    // Hide on blur immediately when focus is lost
     this.field.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (!this.element.matches(':hover')) {
-          this.hide();
-        }
-      }, 200);
+      // Remove the delay - just check if mouse is over the button
+      if (!this.element.matches(':hover')) {
+        this.hide();
+      }
+    });
+    
+    // Also hide the button when mouse leaves the button itself (if it was hovered separately)
+    this.element.addEventListener('mouseleave', () => {
+      // Only hide if the field also doesn't have focus
+      if (document.activeElement !== this.field) {
+        this.hide();
+      }
     });
     
     // Click to toggle toolbar

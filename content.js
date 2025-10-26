@@ -54,18 +54,6 @@ function createFloatingPopup() {
         <span class="ai-btn-icon">🔤</span>
         Translate Text
       </button>
-      <button class="ai-btn" data-action="social-content">
-        <span class="ai-btn-icon">📱</span>
-        Social Content
-      </button>
-      <button class="ai-btn" data-action="save-bookmark">
-        <span class="ai-btn-icon">🔖</span>
-        Save Bookmark
-      </button>
-      <button class="ai-btn ai-btn-primary" data-action="call-mindy">
-        <span class="ai-btn-icon">🎤</span>
-        Call Mindy
-      </button>
       <div class="ai-btn-row">
         <button class="ai-btn ai-btn-tts" data-action="text-to-speech">
           <span class="ai-btn-icon">🔊</span>
@@ -75,10 +63,28 @@ function createFloatingPopup() {
           <span class="ai-control-icon">⏸</span>
         </button>
       </div>
-      <button class="ai-btn ai-btn-secondary" data-action="open-panel">
-        <span class="ai-btn-icon">⚙️</span>
-        Open Dashboard
+      <button class="ai-btn ai-btn-secondary" data-action="chat-page">
+        <span class="ai-btn-icon">💬</span>
+        Chat with Page
       </button>
+      <button class="ai-btn ai-btn-primary" data-action="call-mindy">
+        <span class="ai-btn-icon">🎤</span>
+        Call Mindy
+      </button>
+      <div class="ai-btn-row">
+        <button class="ai-btn" data-action="social-content">
+          <span class="ai-btn-icon">📱</span>
+          Social Content
+        </button>
+        <button class="ai-btn" data-action="save-bookmark">
+          <span class="ai-btn-icon">🔖</span>
+          Save Bookmark
+        </button>
+        <button class="ai-btn ai-btn-secondary" data-action="open-panel">
+          <span class="ai-btn-icon">⚙️</span>
+          Open Dashboard
+        </button>
+      </div>
     </div>
   `;
 
@@ -123,6 +129,16 @@ function createFloatingPopup() {
   floatingPopup.querySelectorAll('.ai-btn').forEach(btn => {
     btn.addEventListener('click', handleButtonClick);
   });
+  
+  // Pause/Play button handler
+  const controlBtn = floatingPopup.querySelector('[data-action="tts-control"]');
+  if (controlBtn) {
+    controlBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleTTSPlayback();
+    });
+  }
   
   // Initial check for side panel
   setTimeout(() => checkSidePanelAndAdjustPopup(), 100);
@@ -208,8 +224,13 @@ async function handleButtonClick(e) {
       });
       break;
     case 'chat-page':
-      chrome.runtime.sendMessage({ action: 'openSidePanel' });
-      chrome.runtime.sendMessage({ action: 'switchToChat' });
+      // Open sidebar and switch to Chat tab
+      chrome.runtime.sendMessage({ action: 'openSidePanel' }, () => {
+        // Small delay to ensure sidepanel is open before switching tabs
+        setTimeout(() => {
+          chrome.runtime.sendMessage({ action: 'switchToChat' });
+        }, 100);
+      });
       break;
     case 'open-panel':
       chrome.runtime.sendMessage({ action: 'openSidePanel' });
