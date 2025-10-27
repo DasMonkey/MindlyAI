@@ -187,15 +187,17 @@ function setupEventListeners() {
   
   // Call Mindy
   document.getElementById('mindyStartBtn').addEventListener('click', startMindyCall);
+  document.getElementById('mindyRefreshBtn').addEventListener('click', startFreshMindySession);
+  document.getElementById('mindyNewSessionBtn').addEventListener('click', startFreshMindySession);
   document.getElementById('mindyMuteBtn').addEventListener('click', toggleMindyMute);
   document.getElementById('mindyEndBtn').addEventListener('click', endMindyCall);
 }
 
 // Listen for tab activation changes
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  // Check if we're on the chat tab in sidepanel
+  // Check if we're on the chat or mindy tab in sidepanel
   const currentTab = document.querySelector('.tab.active')?.dataset.tab;
-  if (currentTab === 'chat') {
+  if (currentTab === 'chat' || currentTab === 'mindy') {
     await checkForTabChange();
   }
 });
@@ -206,7 +208,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs[0] && tabs[0].id === tabId) {
       const currentTab = document.querySelector('.tab.active')?.dataset.tab;
-      if (currentTab === 'chat') {
+      if (currentTab === 'chat' || currentTab === 'mindy') {
         await checkForTabChange();
       }
     }
@@ -454,11 +456,11 @@ async function switchTab(tabName) {
     }
   }
 
-  if (tabName === 'chat') {
+  if (tabName === 'chat' || tabName === 'mindy') {
     try {
       await checkForTabChange();
     } catch (error) {
-      console.log('Could not verify tab change on chat switch:', error);
+      console.log('Could not verify tab change on tab switch:', error);
     }
   }
 }
@@ -1515,9 +1517,19 @@ async function checkForTabChange() {
       return; // User hasn't interacted yet, keep button hidden
     }
     
+    // Get the currently active sidepanel tab
+    const currentTab = document.querySelector('.tab.active')?.dataset.tab;
+    
     // Check if this is a different tab or URL
     if (currentPageTab.id && (currentPageTab.id !== newTabId || currentPageTab.url !== newUrl)) {
-      const refreshBtn = document.getElementById('chatRefreshBtn');
+      // Determine which button to show based on active sidepanel tab
+      let refreshBtn = null;
+      if (currentTab === 'chat') {
+        refreshBtn = document.getElementById('chatRefreshBtn');
+      } else if (currentTab === 'mindy') {
+        refreshBtn = document.getElementById('mindyRefreshBtn');
+      }
+      
       if (refreshBtn) {
         // Check if returning to original session tab
         if (chatSessionTab.id === newTabId && chatSessionTab.url === newUrl) {
@@ -1573,6 +1585,41 @@ async function startFreshChatSession() {
   }
   
   console.log('✅ Started fresh chat session with new page');
+}
+
+// Start fresh Mindy session with new page
+async function startFreshMindySession() {
+  // Clear Mindy transcript
+  const mindyTranscript = document.getElementById('mindyTranscriptPanel');
+  mindyTranscript.innerHTML = `
+    <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can answer your questions via voice.</p>
+  `;
+  
+  // Clear page content and session activity
+  pageContent = null;
+  sessionActivity = { hasInteraction: false, source: null };
+  
+  // Clear captured PDF pages if in PDF mode
+  if (pdfMode.isActive) {
+    pdfMode.capturedPages = [];
+  }
+  
+  // Update session tab to current tab (new session starts here)
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]) {
+    chatSessionTab.id = tabs[0].id;
+    chatSessionTab.url = tabs[0].url;
+    currentPageTab.id = tabs[0].id;
+    currentPageTab.url = tabs[0].url;
+  }
+  
+  // Hide refresh button
+  const refreshBtn = document.getElementById('mindyRefreshBtn');
+  if (refreshBtn) {
+    refreshBtn.style.display = 'none';
+  }
+  
+  console.log('✅ Started fresh Mindy session with new page');
 }
 
 // Send chat message
@@ -1705,10 +1752,11 @@ function removeTypingIndicator() {
   }
 }
 
-// Clear chat
-function clearChat() {
+// Clear chat and start fresh session
+async function clearChat() {
   if (!confirm('Are you sure you want to clear the chat history?')) return;
   
+  // Clear chat messages except welcome message
   const chatMessages = document.getElementById('chatMessages');
   chatMessages.innerHTML = `
     <div class="chat-message ai-message">
@@ -1719,7 +1767,30 @@ function clearChat() {
     </div>
   `;
   
+  // Clear page content and chat history
+  pageContent = null;
   chatHistory = [];
+  sessionActivity = { hasInteraction: false, source: null };
+  
+  // Update session tab to current tab (new session starts here)
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]) {
+    chatSessionTab.id = tabs[0].id;
+    chatSessionTab.url = tabs[0].url;
+    currentPageTab.id = tabs[0].id;
+    currentPageTab.url = tabs[0].url;
+  }
+  
+  // Load new page content
+  await loadPageContent();
+  
+  // Hide refresh button
+  const refreshBtn = document.getElementById('chatRefreshBtn');
+  if (refreshBtn) {
+    refreshBtn.style.display = 'none';
+  }
+  
+  console.log('✅ Chat cleared and fresh session started');
 }
 
 // Translate and replace selected text
@@ -2558,6 +2629,27 @@ async function startMindyCall() {
   updateMindyStatus('Starting call...');
 
   try {
+    // Get page context from active tab FIRST to detect PDF
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+    if (!activeTab) {
+      throw new Error('Unable to detect the active tab for Mindy.');
+    }
+    
+    // Check if this is a PDF and update PDF mode immediately
+    const isPDF = activeTab.url.toLowerCase().endsWith('.pdf') || activeTab.url.includes('.pdf?');
+    
+    if (isPDF) {
+      console.log('📄 PDF detected, activating PDF mode...');
+      pdfMode.isActive = true;
+      pdfMode.currentTab = activeTab;
+      updatePDFStatusBanner();
+    } else {
+      // Not a PDF - deactivate PDF mode
+      pdfMode.isActive = false;
+      updatePDFStatusBanner(); // Hide the banner
+    }
+    
     // Request microphone access
     mindyMediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -2574,13 +2666,7 @@ async function startMindyCall() {
 
     updateMindyStatus('Connecting to Gemini...');
 
-    // Get page context from active tab
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const activeTab = tabs[0];
-    if (!activeTab) {
-      throw new Error('Unable to detect the active tab for Mindy.');
-    }
-    
+    // Set up session tracking
     chatSessionTab.id = activeTab.id;
     chatSessionTab.url = activeTab.url;
     currentPageTab.id = activeTab.id;

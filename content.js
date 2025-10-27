@@ -38,7 +38,10 @@ function createFloatingPopup() {
   
   floatingPopup.innerHTML = `
     <div class="ai-popup-header">
-      <span class="ai-popup-title">✨ Mentelo</span>
+      <span class="ai-popup-title">
+        <img src="${chrome.runtime.getURL('icons/Mentelo-logo-wh.png')}" alt="Mentelo" style="width: 16px; height: 16px; margin-right: 4px;">
+        Mentelo
+      </span>
       <button class="ai-popup-toggle" title="Minimize/Expand">−</button>
     </div>
     <div class="ai-popup-content">
@@ -215,24 +218,44 @@ async function handleButtonClick(e) {
     case 'call-mindy':
       // Open sidebar and switch to Mindy tab
       // PDFs are now handled automatically with the PDF Status Banner
-      chrome.runtime.sendMessage({ action: 'openSidePanel' }, () => {
+      chrome.runtime.sendMessage({ action: 'openSidePanel' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('Extension context invalidated:', chrome.runtime.lastError.message);
+          return;
+        }
         // Small delay to ensure sidepanel is open before switching tabs
         setTimeout(() => {
-          chrome.runtime.sendMessage({ action: 'switchToMindy' });
+          chrome.runtime.sendMessage({ action: 'switchToMindy' }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.log('Extension context invalidated:', chrome.runtime.lastError.message);
+            }
+          });
         }, 100);
       });
       break;
     case 'chat-page':
       // Open sidebar and switch to Chat tab
-      chrome.runtime.sendMessage({ action: 'openSidePanel' }, () => {
+      chrome.runtime.sendMessage({ action: 'openSidePanel' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('Extension context invalidated:', chrome.runtime.lastError.message);
+          return;
+        }
         // Small delay to ensure sidepanel is open before switching tabs
         setTimeout(() => {
-          chrome.runtime.sendMessage({ action: 'switchToChat' });
+          chrome.runtime.sendMessage({ action: 'switchToChat' }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.log('Extension context invalidated:', chrome.runtime.lastError.message);
+            }
+          });
         }, 100);
       });
       break;
     case 'open-panel':
-      chrome.runtime.sendMessage({ action: 'openSidePanel' });
+      chrome.runtime.sendMessage({ action: 'openSidePanel' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('Extension context invalidated:', chrome.runtime.lastError.message);
+        }
+      });
       break;
   }
 }

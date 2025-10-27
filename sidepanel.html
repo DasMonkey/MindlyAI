@@ -9,7 +9,10 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>✨ Mentelo</h1>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <img src="icons/Mentelo-logo-wh.png" alt="Mentelo" style="width: 28px; height: 28px;">
+        <h1>Mentelo</h1>
+      </div>
       <div class="api-status">
         <span class="status-indicator" id="apiStatus"></span>
         <span id="apiStatusText">Not configured</span>
@@ -105,11 +108,24 @@
         <!-- PDF Status Banner for Mindy -->
         <div id="pdfStatusBannerMindy" class="pdf-status-banner" style="display: none;"></div>
         
+        <!-- New Session Button -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; margin: 0 16px 4px 16px;">
+          <button id="mindyNewSessionBtn" class="mindy-new-session-btn">
+            ↻ New Session
+          </button>
+        </div>
+        
         <div class="mindy-transcript-panel">
           <div id="mindyTranscriptPanel">
             <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can answer your questions via voice.</p>
           </div>
         </div>
+        
+        <!-- Tab Change Notification Button for Mindy -->
+        <button id="mindyRefreshBtn" class="chat-refresh-btn" style="display: none;">
+          <span class="refresh-icon">🔄</span>
+          <span class="refresh-text">New page detected - Start fresh call</span>
+        </button>
         
         <div class="mindy-controls-panel">
           <button id="mindyStartBtn" class="btn btn-primary">
@@ -251,7 +267,7 @@
         <h2>ℹ️ About</h2>
         <div class="about-info">
           <p><strong>Version:</strong> 1.0.0</p>
-          <p><strong>Model:</strong> Gemini 2.0 Flash</p>
+          <p><strong>Model:</strong> Gemini APIs</p>
           <p><a href="https://github.com" target="_blank" class="link">Documentation</a></p>
         </div>
       </div>

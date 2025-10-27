@@ -23,6 +23,9 @@ body {
 }
 
 .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   flex-shrink: 0;
   padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -31,8 +34,8 @@ body {
 }
 
 .header h1 {
-  font-size: 16px; /* Reduced from 24px */
-  margin-bottom: 2px; /* Reduced vertical spacing */
+  font-size: 16px;
+  margin: 0; /* Reset margin for flex layout */
   background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -856,8 +859,9 @@ body {
 }
 
 .refresh-text {
-  flex: 1;
-  text-align: left;
+  flex: 0 1 auto;
+  text-align: center;
+  white-space: nowrap;
 }
 
 @keyframes pulseGlow {
@@ -1146,13 +1150,37 @@ body {
   letter-spacing: 1px;
 }
 
+/* Mindy New Session Button */
+.mindy-new-session-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.mindy-new-session-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.mindy-new-session-btn:active {
+  transform: scale(0.98);
+}
+
 .mindy-transcript-panel {
   flex: 1;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 16px;
-  margin: 16px 0;
+  margin: 0 0 16px 0;
   overflow-y: auto;
 }
 
