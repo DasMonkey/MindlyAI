@@ -10,7 +10,7 @@ class GrammarChecker {
   }
 
   init() {
-    console.log('📝 Grammar Checker initialized');
+    console.log('🔍 Grammar Checker initialized');
     this.detectExistingFields();
     this.observeNewFields();
   }
@@ -19,7 +19,7 @@ class GrammarChecker {
     const fields = document.querySelectorAll(
       'textarea, input[type="text"], input[type="email"], [contenteditable="true"]'
     );
-    
+
     fields.forEach(field => this.attachToField(field));
   }
 
@@ -84,27 +84,35 @@ class GrammarChecker {
       return this.checkCache.get(cacheKey);
     }
 
-    const prompt = `You are a grammar and spelling checker. Check this text carefully and return ALL errors at once (both spelling AND grammar).
+    const prompt = `You are an expert grammar and spelling checker. Your task is to analyze the user's text below and identify only genuine errors.
 
-Return a JSON array in this exact format:
+ANALYZE THIS TEXT:
+"""
+${text}
+"""
+
+Return a JSON array with any errors found:
 [{"error": "the wrong text", "correction": "the correct text", "type": "grammar" or "spelling", "message": "brief explanation"}]
 
-IMPORTANT RULES:
-- Check for BOTH spelling and grammar errors in the SAME analysis
-- Return ALL errors found, even if they are in the same sentence
-- If a sentence has both spelling AND grammar errors, include BOTH separately
-- Only include errors where correction is DIFFERENT from the error text
-- For grammar errors that depend on spelling, show the final corrected version
-- Skip punctuation-only changes unless grammatically necessary
-- If no real errors exist, return empty array: []
-- Return ONLY valid JSON, no explanations or markdown
+EXPERT GUIDELINES:
+- Read the COMPLETE text with full context before identifying errors
+- "I was" is CORRECT (singular first person past tense)
+- "I were" is ONLY correct in subjunctive mood (e.g., "If I were rich")
+- "He/She/It was" is CORRECT (singular third person)
+- Only flag actual errors where the correction is DIFFERENT from the original
+- Consider complete sentences and phrases, not isolated words
+- Return empty array [] if no errors exist
+- Return ONLY valid JSON, no markdown or explanations
 
-Examples:
-- Input: "He dont like apples"
-  Output: [{"error": "dont", "correction": "doesn't", "type": "spelling", "message": "Missing apostrophe"}, {"error": "dont like", "correction": "doesn't like", "type": "grammar", "message": "Subject-verb agreement"}]
+CORRECT EXAMPLES:
+- "I was thinking" ✓ (correct - singular first person)
+- "He was going" ✓ (correct - singular third person)
+- "They were going" ✓ (correct - plural)
+- "because she left" ✓ (correct - complete word)
 
-Text to check:
-${text}
+ERROR EXAMPLES:
+- "He dont like" → [{"error": "dont", "correction": "doesn't", "type": "spelling", "message": "Missing apostrophe"}]
+- "I were happy" → [{"error": "were", "correction": "was", "type": "grammar", "message": "Use 'was' with singular 'I'"}]
 
 JSON response:`;
 
@@ -115,7 +123,7 @@ JSON response:`;
           reject(new Error('Extension context invalidated'));
           return;
         }
-        
+
         try {
           chrome.runtime.sendMessage({
             action: 'grammarCheck',
@@ -135,42 +143,68 @@ JSON response:`;
       if (response?.result) {
         let errors = [];
         try {
-          // Clean up the response - remove markdown code blocks if present
-          let jsonText = response.result.trim();
-          if (jsonText.startsWith('```json')) {
-            jsonText = jsonText.substring(7);
-          }
-          if (jsonText.startsWith('```')) {
-            jsonText = jsonText.substring(3);
-          }
-          if (jsonText.endsWith('```')) {
-            jsonText = jsonText.substring(0, jsonText.length - 3);
-          }
-          jsonText = jsonText.trim();
+          let responseText = response.result.trim();
 
-          errors = JSON.parse(jsonText);
-          
-          // Validate the structure and filter out bad suggestions
+          // Remove markdown code blocks
+          responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+          // METHOD 1: Try standard JSON parse first
+          try {
+            const parsed = JSON.parse(responseText);
+            if (Array.isArray(parsed)) {
+              errors = parsed;
+            }
+          } catch (jsonError) {
+            // METHOD 2: Extract individual error objects using regex - BULLETPROOF
+            // This handles incomplete JSON by extracting only what's parseable
+            const errorPattern = /\{\s*"error"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*,\s*"correction"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*,\s*"type"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*,\s*"message"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*\}/g;
+
+            let match;
+            while ((match = errorPattern.exec(responseText)) !== null) {
+              errors.push({
+                error: match[1],
+                correction: match[2],
+                type: match[3],
+                message: match[4]
+              });
+            }
+
+            // If regex didn't find complete objects, try simpler pattern
+            if (errors.length === 0) {
+              const simplePattern = /"error"\s*:\s*"([^"]*)"\s*,\s*"correction"\s*:\s*"([^"]*)"/g;
+              while ((match = simplePattern.exec(responseText)) !== null) {
+                errors.push({
+                  error: match[1],
+                  correction: match[2],
+                  type: 'grammar',
+                  message: ''
+                });
+              }
+            }
+          }
+
+          // Validate and filter
           if (!Array.isArray(errors)) {
             errors = [];
           }
-          
-          // Filter out errors where correction is same as error (case-insensitive)
-          errors = errors.filter(err => 
-            err.error && err.correction && 
+
+          errors = errors.filter(err =>
+            err.error &&
+            err.correction &&
             err.error.toLowerCase().trim() !== err.correction.toLowerCase().trim()
           );
+
         } catch (e) {
-          console.error('Failed to parse grammar check response:', e);
+          console.error('Grammar check parsing completely failed:', e);
           errors = [];
         }
 
         // Filter out ignored errors
         errors = errors.filter(err => !this.ignoredErrors.has(err.error));
-        
+
         // Cache the result
         this.checkCache.set(cacheKey, errors);
-        
+
         // Limit cache size
         if (this.checkCache.size > 100) {
           const firstKey = this.checkCache.keys().next().value;
@@ -181,11 +215,11 @@ JSON response:`;
       }
     } catch (error) {
       // Silently ignore extension context invalidation errors (happens on reload)
-      const isExpectedError = 
+      const isExpectedError =
         error.message === 'Extension context invalidated' ||
         error.message?.includes('Could not establish connection') ||
         error.message?.includes('Receiving end does not exist');
-      
+
       if (!isExpectedError) {
         console.error('Grammar check error:', error);
       }
@@ -206,32 +240,46 @@ class FieldChecker {
     this.lastCheckedText = '';
     this.debounceTimer = null;
     this.hoverTracked = false;
+    this.isApplyingCorrection = false; // Flag to prevent removing all highlights when applying a fix
     this.attachListeners();
   }
 
   attachListeners() {
     // Check on input with debounce
-    this.field.addEventListener('input', () => this.scheduleCheck());
+    this.field.addEventListener('input', () => {
+      this.handleTextChange();
+      this.scheduleCheck();
+    });
     this.field.addEventListener('focus', () => this.scheduleCheck());
+  }
+
+  handleTextChange() {
+    // When text changes, immediately hide highlights to prevent misalignment
+    // They will reappear after the debounce with correct positions
+    // EXCEPT when applying a correction - in that case, only the specific highlight is removed
+    if (!this.isApplyingCorrection) {
+      this.removeOverlay();
+    }
   }
 
   scheduleCheck() {
     clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => this.checkGrammar(), 1000);
+    // 500ms delay - faster response while still avoiding checking on every keystroke
+    this.debounceTimer = setTimeout(() => this.checkGrammar(), 500);
   }
 
   async checkGrammar() {
     const text = this.getFieldText();
-    
+
     if (!text || text.length < 3 || text === this.lastCheckedText) {
       return;
     }
 
     this.lastCheckedText = text;
-    
+
     // Check text with AI
     this.errors = await this.grammarChecker.checkText(text);
-    
+
     if (this.errors.length > 0) {
       this.showUnderlines();
     } else {
@@ -249,49 +297,86 @@ class FieldChecker {
   showUnderlines() {
     this.removeOverlay();
 
-    const text = this.getFieldText();
     const fieldRect = this.field.getBoundingClientRect();
 
-    // Create overlay container
+    // Get field's computed style to account for padding
+    const computedStyle = window.getComputedStyle(this.field);
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+
+    // Create overlay container - position FIXED to viewport
     this.overlay = document.createElement('div');
     this.overlay.className = 'grammar-overlay';
+    
+    // Get border-radius to match field's rounded corners
+    const borderRadius = computedStyle.borderRadius || '0';
+    
+    // Use clientWidth/clientHeight to get the VISIBLE area (excludes scrollbar)
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    const overlayWidth = this.field.clientWidth - paddingLeft - paddingRight;
+    const overlayHeight = this.field.clientHeight - paddingTop - paddingBottom;
+    
     this.overlay.style.cssText = `
       position: fixed;
-      top: ${fieldRect.top}px;
-      left: ${fieldRect.left}px;
-      width: ${fieldRect.width}px;
-      height: ${fieldRect.height}px;
+      top: ${fieldRect.top + paddingTop}px;
+      left: ${fieldRect.left + paddingLeft}px;
+      width: ${overlayWidth}px;
+      height: ${overlayHeight}px;
       pointer-events: none;
       z-index: 9999;
-      overflow: hidden;
-      clip-path: inset(0);
+      overflow: hidden !important;
+      border-radius: ${borderRadius};
+      box-sizing: border-box;
+      clip-path: inset(0px 0px 0px 0px);
+      -webkit-clip-path: inset(0px 0px 0px 0px);
     `;
 
-    // For each error, find its position and add an underline
-    this.errors.forEach(error => {
-      const errorIndex = text.indexOf(error.error);
-      if (errorIndex !== -1) {
-        this.addUnderline(error, errorIndex);
-      }
-    });
-
+    // IMPORTANT: Append overlay to DOM BEFORE getting its bounding rect
     document.body.appendChild(this.overlay);
+
+    // For each error, find its position and add an underline
+    // Use a more robust approach: search for the text directly in the DOM
+    this.errors.forEach(error => {
+      this.addUnderlineByText(error);
+    });
 
     // Setup hover tracking for showing suggestions
     this.setupFieldHoverTracking();
 
     // Update overlay position on scroll (page scroll or field internal scroll)
     const updatePosition = () => {
+      if (!this.overlay) return;
+      
       const newRect = this.field.getBoundingClientRect();
-      if (this.overlay) {
-        this.overlay.style.top = `${newRect.top}px`;
-        this.overlay.style.left = `${newRect.left}px`;
-        this.overlay.style.width = `${newRect.width}px`;
-        this.overlay.style.height = `${newRect.height}px`;
-        
-        // Recalculate underline positions when field scrolls internally
-        this.updateUnderlinePositions();
+      const computedStyle = window.getComputedStyle(this.field);
+      const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+      const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+      const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+      const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+
+      // Check if field is visible in viewport
+      const isVisible = 
+        newRect.top < window.innerHeight &&
+        newRect.bottom > 0 &&
+        newRect.left < window.innerWidth &&
+        newRect.right > 0;
+
+      if (!isVisible) {
+        // Hide overlay if field is not visible
+        this.overlay.style.display = 'none';
+        return;
       }
+
+      // Show and update overlay position
+      this.overlay.style.display = 'block';
+      this.overlay.style.top = `${newRect.top + paddingTop}px`;
+      this.overlay.style.left = `${newRect.left + paddingLeft}px`;
+      this.overlay.style.width = `${newRect.width - paddingLeft - paddingRight}px`;
+      this.overlay.style.height = `${newRect.height - paddingTop - paddingBottom}px`;
+
+      // Recalculate underline positions when field scrolls internally
+      this.updateUnderlinePositions();
     };
 
     // Listen to field's internal scroll
@@ -308,60 +393,148 @@ class FieldChecker {
   }
 
   updateUnderlinePositions() {
-    // Recalculate all underline positions relative to current field state
-    if (!this.overlay) return;
+    // Recalculate all underline positions by searching for text again
+    // This ensures highlights move with text when line breaks are added
+    if (!this.overlay || !this.errors || this.errors.length === 0) return;
+
+    // Clear existing underlines
+    this.overlay.innerHTML = '';
+
+    // Recalculate each error's position
+    const overlayRect = this.overlay.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(this.field);
+    const lineHeight = parseFloat(computedStyle.lineHeight) || parseFloat(computedStyle.fontSize) * 1.2;
     
-    const underlines = this.overlay.querySelectorAll('.grammar-underline');
-    const fieldRect = this.field.getBoundingClientRect();
-    
-    underlines.forEach(underline => {
-      const errorData = JSON.parse(underline.dataset.error);
-      const text = this.getFieldText();
-      const errorIndex = text.indexOf(errorData.error);
+    // Get overlay dimensions for visibility checking
+    const overlayWidth = this.overlay.offsetWidth;
+    const overlayHeight = this.overlay.offsetHeight;
+
+    this.errors.forEach(error => {
+      const errorText = error.error;
       
-      if (errorIndex === -1) {
-        // Error text no longer exists, hide underline
-        underline.style.display = 'none';
-        return;
-      }
-      
-      // Get new position
-      let errorRect;
       if (this.field.contentEditable === 'true') {
-        const range = this.getRangeForError(errorIndex, errorData.error.length);
-        if (range) {
-          errorRect = range.getBoundingClientRect();
+        // Use TreeWalker to find text
+        const walker = document.createTreeWalker(
+          this.field,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+
+        let node;
+        while (node = walker.nextNode()) {
+          const index = node.textContent.indexOf(errorText);
+          if (index !== -1) {
+            try {
+              const range = document.createRange();
+              range.setStart(node, index);
+              range.setEnd(node, index + errorText.length);
+              const rects = range.getClientRects();
+
+              if (rects && rects.length > 0) {
+                Array.from(rects).forEach((rect, idx) => {
+                  if (rect.width > 0 && rect.height > 0) {
+                    const left = rect.left - overlayRect.left;
+                    const top = rect.top - overlayRect.top;
+                    const width = Math.min(rect.width, overlayWidth - left);
+                    const height = Math.min(rect.height, lineHeight + 2);
+
+                    // Only create if COMPLETELY visible within overlay bounds
+                    const isVisible = 
+                      left >= 0 && 
+                      top >= 0 && 
+                      (left + width) <= overlayWidth && 
+                      (top + height) <= overlayHeight;
+
+                    if (isVisible && width > 0 && height > 0) {
+                      this.createUnderlineElement(error, left, top, width, height, idx);
+                    }
+                  }
+                });
+                break; // Only highlight first occurrence
+              }
+            } catch (e) {
+              // Silently skip if range creation fails
+            }
+          }
         }
       } else {
-        errorRect = this.getMirrorRect(errorIndex, errorData.error.length);
-      }
-      
-      if (errorRect) {
-        // Update position relative to overlay (which is fixed to field bounds)
-        underline.style.left = `${errorRect.left - fieldRect.left}px`;
-        underline.style.top = `${errorRect.top - fieldRect.top}px`;
-        underline.style.width = `${errorRect.width}px`;
-        underline.style.height = `${errorRect.height}px`;
-        underline.style.display = 'block';
+        // For textarea/input
+        const text = this.field.value;
+        const index = text.indexOf(errorText);
+        if (index !== -1) {
+          const errorRect = this.getMirrorRect(index, errorText.length);
+          if (errorRect && errorRect.width > 0) {
+            const left = errorRect.left - overlayRect.left;
+            const top = errorRect.top - overlayRect.top;
+            const width = Math.min(errorRect.width, overlayWidth - left);
+            const height = Math.min(errorRect.height, lineHeight + 2);
+
+            // Only create if COMPLETELY visible within overlay bounds
+            const isVisible = 
+              left >= 0 && 
+              top >= 0 && 
+              (left + width) <= overlayWidth && 
+              (top + height) <= overlayHeight;
+
+            if (isVisible && width > 0 && height > 0) {
+              this.createUnderlineElement(error, left, top, width, height);
+            }
+          }
+        }
       }
     });
   }
-  
+
   getRangeForError(startIndex, length) {
     if (this.field.contentEditable !== 'true') return null;
-    
+
+    // Validate input parameters
+    const fieldText = this.getFieldText();
+    if (startIndex < 0 || startIndex >= fieldText.length) {
+      console.warn('Invalid startIndex in getRangeForError:', startIndex, 'Text length:', fieldText.length);
+      return null;
+    }
+
+    // Make sure length doesn't exceed available text
+    if (length <= 0 || (startIndex + length) > fieldText.length) {
+      console.warn('Invalid length in getRangeForError:', length, 'startIndex:', startIndex, 'textLength:', fieldText.length);
+      return null;
+    }
+
     const nodes = this.getAllNodes(this.field);
     let currentIndex = 0;
-    
+
     for (let node of nodes) {
       if (node.nodeType === Node.TEXT_NODE) {
         const nodeLength = node.textContent.length;
-        if (currentIndex + nodeLength > startIndex) {
+        // Check if this node contains the startIndex
+        if (startIndex >= currentIndex && startIndex < currentIndex + nodeLength) {
           const range = document.createRange();
           const offsetInNode = startIndex - currentIndex;
-          range.setStart(node, offsetInNode);
-          range.setEnd(node, Math.min(offsetInNode + length, nodeLength));
-          return range;
+
+          // VALIDATE offset is within node bounds BEFORE using it
+          if (offsetInNode < 0 || offsetInNode > nodeLength) {
+            console.warn('Invalid offsetInNode:', offsetInNode, 'for node length:', nodeLength, 'startIndex:', startIndex, 'currentIndex:', currentIndex);
+            return null;
+          }
+
+          const endOffset = Math.min(offsetInNode + length, nodeLength);
+
+          // Additional safety: validate endOffset
+          if (endOffset < offsetInNode || endOffset > nodeLength) {
+            console.warn('Invalid endOffset:', endOffset, 'offsetInNode:', offsetInNode, 'nodeLength:', nodeLength);
+            return null;
+          }
+
+          try {
+            range.setStart(node, offsetInNode);
+            range.setEnd(node, endOffset);
+            return range;
+          } catch (e) {
+            console.error('Error creating range:', e, { offsetInNode, endOffset, nodeLength });
+            return null;
+          }
         }
         currentIndex += nodeLength;
       } else if (node.nodeName === 'BR') {
@@ -371,35 +544,236 @@ class FieldChecker {
     return null;
   }
 
+  findWholeWordIndex(text, searchText) {
+    // Find the search text as a whole word/phrase, not as a substring within another word
+    // This prevents matching "cause" inside "because"
+    
+    // If the search text contains spaces, it's a phrase - match it exactly with word boundaries
+    if (searchText.includes(' ')) {
+      // For phrases, use regex with word boundaries at start and end
+      const escapedSearch = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedSearch}\\b`, 'i');
+      const match = text.match(regex);
+      return match ? match.index : -1;
+    }
+    
+    // For single words, check word boundaries manually
+    let index = 0;
+    while ((index = text.indexOf(searchText, index)) !== -1) {
+      const charBefore = index > 0 ? text[index - 1] : ' ';
+      const charAfter = index + searchText.length < text.length ? text[index + searchText.length] : ' ';
+      
+      // Check if both surrounding characters are word boundaries (space, punctuation, etc.)
+      const isWordBoundaryBefore = /[\s.,!?;:()\[\]{}"'\n\r\t]/.test(charBefore) || index === 0;
+      const isWordBoundaryAfter = /[\s.,!?;:()\[\]{}"'\n\r\t]/.test(charAfter) || index + searchText.length === text.length;
+      
+      if (isWordBoundaryBefore && isWordBoundaryAfter) {
+        return index;
+      }
+      
+      index++;
+    }
+    
+    return -1;
+  }
+
+  addUnderlineByText(error) {
+    // Modern approach: Use window.find() or TreeWalker to locate text
+    // This avoids character counting issues with line breaks
+    const errorText = error.error;
+
+    if (!errorText || !errorText.trim()) {
+      return;
+    }
+
+    const fieldRect = this.field.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(this.field);
+    const lineHeight = parseFloat(computedStyle.lineHeight) || parseFloat(computedStyle.fontSize) * 1.2;
+    const overlayRect = this.overlay.getBoundingClientRect();
+
+    if (this.field.contentEditable === 'true') {
+      // For contenteditable: Use TreeWalker to find text
+      this.findAndHighlightInContentEditable(error, errorText, overlayRect, lineHeight);
+    } else {
+      // For textarea/input: Use the mirror method
+      this.findAndHighlightInTextarea(error, errorText, overlayRect, lineHeight, fieldRect, computedStyle);
+    }
+  }
+
+  findAndHighlightInContentEditable(error, errorText, overlayRect, lineHeight) {
+    // Use TreeWalker to search through all text nodes
+    const walker = document.createTreeWalker(
+      this.field,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+
+    // Get the field's visible viewport in viewport coordinates
+    const fieldRect = this.field.getBoundingClientRect();
+    const fieldTop = fieldRect.top;
+    const fieldBottom = fieldRect.bottom;
+    const fieldLeft = fieldRect.left;
+    const fieldRight = fieldRect.right;
+
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent;
+      const index = this.findWholeWordIndex(text, errorText);
+
+      if (index !== -1) {
+        // Found the error text in this node
+        try {
+          const range = document.createRange();
+          range.setStart(node, index);
+          range.setEnd(node, index + errorText.length);
+
+          const rects = range.getClientRects();
+
+          if (rects && rects.length > 0) {
+            // Handle multi-line errors
+            Array.from(rects).forEach((rect, idx) => {
+              if (rect.width > 0 && rect.height > 0) {
+                // Check if this rect is within the field's visible viewport
+                const isInViewport = 
+                  rect.bottom > fieldTop &&
+                  rect.top < fieldBottom &&
+                  rect.right > fieldLeft &&
+                  rect.left < fieldRight;
+
+                if (!isInViewport) {
+                  // Skip this highlight - it's scrolled out of view
+                  return;
+                }
+
+                const left = rect.left - overlayRect.left;
+                const top = rect.top - overlayRect.top;
+                const width = rect.width;
+                const height = Math.min(rect.height, lineHeight + 2);
+
+                if (left >= 0 && top >= 0 && width > 0 && height > 0) {
+                  this.createUnderlineElement(error, left, top, width, height, idx);
+                }
+              }
+            });
+            break; // Only highlight first occurrence
+          }
+        } catch (e) {
+          // Silently skip if range creation fails
+        }
+      }
+    }
+  }
+
+  findAndHighlightInTextarea(error, errorText, overlayRect, lineHeight, fieldRect, computedStyle) {
+    // For textarea/input, we need to use the mirror technique
+    const text = this.field.value;
+    const index = this.findWholeWordIndex(text, errorText);
+
+    if (index === -1) {
+      return;
+    }
+
+    // Use mirror to get position
+    const errorRect = this.getMirrorRect(index, errorText.length);
+
+    if (!errorRect || errorRect.width === 0) {
+      return;
+    }
+
+    // Calculate position relative to overlay
+    const left = errorRect.left - overlayRect.left;
+    const top = errorRect.top - overlayRect.top;
+    let width = errorRect.width;
+    let height = Math.min(errorRect.height, lineHeight + 2);
+
+    // Validate dimensions
+    const overlayWidth = this.overlay.offsetWidth;
+    if (left < 0 || left >= overlayWidth) {
+      return;
+    }
+
+    // Clamp width to overlay bounds
+    if (left + width > overlayWidth) {
+      width = overlayWidth - left;
+    }
+
+    if (width > 0 && height > 0) {
+      this.createUnderlineElement(error, left, top, width, height);
+    }
+  }
+
   addUnderline(error, startIndex) {
     const text = this.getFieldText();
     const errorText = error.error;
-    
+
+    // Validate parameters
+    if (!errorText || startIndex < 0 || startIndex >= text.length) {
+      console.warn('Invalid parameters for addUnderline:', { errorText, startIndex, textLength: text.length });
+      return;
+    }
+
+    // Verify the error text still exists at this position
+    const actualTextAtPosition = text.substring(startIndex, startIndex + errorText.length);
+    if (actualTextAtPosition !== errorText) {
+      console.warn('Error text mismatch at position:', { expected: errorText, actual: actualTextAtPosition, startIndex });
+      return;
+    }
+
     // Get field position and styles
     const fieldRect = this.field.getBoundingClientRect();
     const computedStyle = window.getComputedStyle(this.field);
     const lineHeight = parseFloat(computedStyle.lineHeight) || parseFloat(computedStyle.fontSize) * 1.2;
-    
+
     // For multi-word errors that might span multiple lines, we need to handle each line separately
     // First, get the bounding rect to see if it spans multiple lines
     let errorRect;
     let range;
-    
+
     if (this.field.contentEditable === 'true') {
       // For contenteditable, walk through all nodes including BR tags
       const nodes = this.getAllNodes(this.field);
       let currentIndex = 0;
-      
+
       for (let node of nodes) {
         if (node.nodeType === Node.TEXT_NODE) {
           const nodeLength = node.textContent.length;
           if (currentIndex + nodeLength > startIndex) {
             // Found the node containing the error
-            range = document.createRange();
             const offsetInNode = startIndex - currentIndex;
-            range.setStart(node, offsetInNode);
-            range.setEnd(node, Math.min(offsetInNode + errorText.length, nodeLength));
-            errorRect = range.getBoundingClientRect();
+
+            // VALIDATE before creating range
+            if (offsetInNode < 0 || offsetInNode >= nodeLength) {
+              console.warn('Invalid offsetInNode in addUnderline:', offsetInNode, 'nodeLength:', nodeLength);
+              currentIndex += nodeLength;
+              continue;
+            }
+
+            const endOffset = Math.min(offsetInNode + errorText.length, nodeLength);
+            if (endOffset < offsetInNode || endOffset > nodeLength) {
+              console.warn('Invalid endOffset in addUnderline:', endOffset);
+              currentIndex += nodeLength;
+              continue;
+            }
+
+            try {
+              range = document.createRange();
+              range.setStart(node, offsetInNode);
+              range.setEnd(node, endOffset);
+
+              // Use getClientRects to get more precise positioning for inline elements
+              const rects = range.getClientRects();
+              if (rects && rects.length > 0) {
+                // For single-line errors, use the first (and only) rect
+                errorRect = rects[0];
+              } else if (range) {
+                errorRect = range.getBoundingClientRect();
+              }
+            } catch (e) {
+              console.error('Error creating range in addUnderline:', e);
+              currentIndex += nodeLength;
+              continue;
+            }
             break;
           }
           currentIndex += nodeLength;
@@ -412,64 +786,98 @@ class FieldChecker {
       // For input/textarea, create a mirror element to measure
       errorRect = this.getMirrorRect(startIndex, errorText.length);
     }
-    
+
+    // CRITICAL: Account for field's internal scroll offset
+    const scrollTop = this.field.scrollTop || 0;
+    const scrollLeft = this.field.scrollLeft || 0;
+
     if (!errorRect || errorRect.width === 0) {
       console.warn('Could not determine error position for:', errorText);
       return;
     }
-    
+
     // Check if the error spans multiple lines (height > 1.5 line heights)
     if (errorRect.height > lineHeight * 1.5) {
       console.log('Error spans multiple lines, creating separate underlines:', errorText);
       this.addMultiLineUnderline(error, startIndex, errorRect, fieldRect, lineHeight);
       return;
     }
-    
+
     // Single line error - create one underline
-    let left = errorRect.left - fieldRect.left;
+    // Account for field padding since overlay is positioned inside padding box
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+
+    // SUBTRACT scroll offset because when you scroll down, content moves up
+    // For contentEditable, don't subtract scrollLeft as it doesn't work the same way
+    const leftOffset = this.field.contentEditable === 'true' ? 0 : scrollLeft;
+    let left = errorRect.left - fieldRect.left - paddingLeft - leftOffset;
+    // For contentEditable, don't subtract scrollTop since errorRect.top from getClientRects() already accounts for it
+    // For input/textarea, we need to subtract scrollTop to position within the overlay
+    const topOffset = this.field.contentEditable === 'true' ? 0 : scrollTop;
+    let top = errorRect.top - fieldRect.top - paddingTop - topOffset;
     let width = errorRect.width;
     let height = errorRect.height;
-    
-    // Clamp height to reasonable line height
-    if (height > lineHeight * 1.5) {
-      height = lineHeight;
-    }
-    
-    // Validate width
-    const maxReasonableWidth = fieldRect.width - left - 10;
-    if (width > maxReasonableWidth || width > fieldRect.width * 0.8) {
-      console.warn('Width too large, using canvas measurement:', errorText);
+
+    // STRICT height clamping - single line errors should never exceed line height + 2px
+    // This prevents highlights from spanning multiple rows
+    const maxHeight = lineHeight + 2;
+    if (height > maxHeight) {
+      height = Math.min(height, maxHeight);
+      // If height was too large, the measurement was likely wrong - use canvas to measure width instead
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       context.font = `${computedStyle.fontSize} ${computedStyle.fontFamily}`;
       const textMetrics = context.measureText(errorText);
-      width = Math.min(textMetrics.width + 4, maxReasonableWidth);
+      width = textMetrics.width + 4; // Add 4px for slight padding
     }
-    
-    // Bounds checking
+
+    // Validate width against reasonable limits
+    const maxReasonableWidth = fieldRect.width - left - 10;
+    // Hard cap: never create highlights wider than 70% of the field width
+    const absoluteMaxWidth = Math.min(maxReasonableWidth, fieldRect.width * 0.7);
+
+    if (width > maxReasonableWidth || width > fieldRect.width * 0.8) {
+      console.warn('Width too large, using canvas measurement:', errorText.substring(0, 50), 'Original width:', width);
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      context.font = `${computedStyle.fontSize} ${computedStyle.fontFamily}`;
+      const textMetrics = context.measureText(errorText);
+      width = Math.min(textMetrics.width + 4, absoluteMaxWidth);
+    }
+
+    // Bounds checking and final width cap
     if (left < 0) left = 0;
     if (left + width > fieldRect.width) width = fieldRect.width - left;
-    
-    if (width <= 0 || width > fieldRect.width) {
-      console.warn('Invalid dimensions, skipping:', errorText);
+    // Final safety check - never exceed 70% of field width
+    if (width > absoluteMaxWidth) {
+      width = absoluteMaxWidth;
+    }
+
+    if (width <= 0 || width > fieldRect.width || height <= 0) {
+      console.warn('Invalid dimensions, skipping:', errorText, 'width:', width, 'height:', height);
       return;
     }
-    
-    this.createUnderlineElement(error, left, errorRect.top - fieldRect.top, width, height);
+
+    this.createUnderlineElement(error, left, top, width, height);
   }
-  
+
   addMultiLineUnderline(error, startIndex, errorRect, fieldRect, lineHeight) {
     // For errors spanning multiple lines, create underline segments per line
     // Use Range API to get client rects for each line
     const text = this.getFieldText();
     const errorText = error.error;
-    
+
+    // Get scroll offsets
+    const scrollTop = this.field.scrollTop || 0;
+    const scrollLeft = this.field.scrollLeft || 0;
+
     let clientRects = [];
-    
+
     if (this.field.contentEditable === 'true') {
       const nodes = this.getAllNodes(this.field);
       let currentIndex = 0;
-      
+
       for (let node of nodes) {
         if (node.nodeType === Node.TEXT_NODE) {
           const nodeLength = node.textContent.length;
@@ -478,7 +886,8 @@ class FieldChecker {
             const offsetInNode = startIndex - currentIndex;
             range.setStart(node, offsetInNode);
             range.setEnd(node, Math.min(offsetInNode + errorText.length, nodeLength));
-            clientRects = Array.from(range.getClientRects());
+            const rects = range.getClientRects();
+            clientRects = rects ? Array.from(rects) : [];
             break;
           }
           currentIndex += nodeLength;
@@ -489,32 +898,77 @@ class FieldChecker {
     } else {
       // For textarea/input, we can't get multi-line rects easily
       // Create single underline with constrained dimensions
-      const left = Math.max(0, errorRect.left - fieldRect.left);
-      const top = errorRect.top - fieldRect.top;
+      const leftOffset = this.field.contentEditable === 'true' ? 0 : scrollLeft;
+      const topOffset = this.field.contentEditable === 'true' ? 0 : scrollTop;
+      const left = Math.max(0, errorRect.left - fieldRect.left - leftOffset);
+      const top = errorRect.top - fieldRect.top - topOffset;
       const width = Math.min(errorRect.width, fieldRect.width - left);
       this.createUnderlineElement(error, left, top, width, lineHeight);
       return;
     }
-    
+
     // Create an underline for each line segment
+    const leftOffsetForEditable = this.field.contentEditable === 'true' ? 0 : scrollLeft;
+    const topOffsetForEditable = this.field.contentEditable === 'true' ? 0 : scrollTop;
     clientRects.forEach((rect, index) => {
       if (rect.width > 0 && rect.height > 0) {
-        const left = Math.max(0, rect.left - fieldRect.left);
-        const top = rect.top - fieldRect.top;
+        const left = Math.max(0, rect.left - fieldRect.left - leftOffsetForEditable);
+        const top = rect.top - fieldRect.top - topOffsetForEditable;
         const width = Math.min(rect.width, fieldRect.width - left);
-        const height = Math.min(rect.height, lineHeight * 1.2);
-        
+        // STRICT height clamping - never exceed lineHeight + 1px for each segment
+        const height = Math.min(rect.height, lineHeight + 1);
+
         if (width > 0 && height > 0) {
           this.createUnderlineElement(error, left, top, width, height, index);
         }
       }
     });
   }
-  
+
   createUnderlineElement(error, left, top, width, height, segmentIndex = 0) {
     // Create underline span that aligns with the text
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+
+    // Get the field's actual visible viewport dimensions
+    // clientHeight/clientWidth = visible area (what user sees)
+    // scrollHeight/scrollWidth = total content area
+    const visibleWidth = this.field.clientWidth;
+    const visibleHeight = this.field.clientHeight;
+    
+    // Get padding to calculate the actual content area
+    const computedStyle = window.getComputedStyle(this.field);
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    
+    // Calculate the visible content area (excluding padding and scrollbar)
+    const visibleContentWidth = visibleWidth - paddingLeft - paddingRight;
+    const visibleContentHeight = visibleHeight - paddingTop - paddingBottom;
+    
+    // STRICT VISIBILITY CHECK: Only create if within visible content area
+    const isCompletelyVisible = 
+      left >= 0 && 
+      top >= 0 && 
+      (left + width) <= visibleContentWidth && 
+      (top + height) <= visibleContentHeight;
+    
+    if (!isCompletelyVisible) {
+      // Don't create highlight if any part is outside the visible viewport
+      return;
+    }
+
     const underline = document.createElement('span');
     underline.className = 'grammar-underline';
+
+    // Store ORIGINAL positions (before any scroll adjustment)
+    underline.dataset.originalLeft = left;
+    underline.dataset.originalTop = top;
+    underline.dataset.originalWidth = width;
+    underline.dataset.originalHeight = height;
+
     underline.style.cssText = `
       position: absolute;
       left: ${left}px;
@@ -526,6 +980,8 @@ class FieldChecker {
       cursor: text;
       display: block;
       background: rgba(255, 68, 68, 0.05);
+      overflow: hidden;
+      box-sizing: border-box;
     `;
 
     underline.dataset.error = JSON.stringify(error);
@@ -534,12 +990,17 @@ class FieldChecker {
 
     this.overlay.appendChild(underline);
   }
-  
+
   setupFieldHoverTracking() {
     if (!this.overlay || this.hoverTracked) return;
     this.hoverTracked = true;
-    
+
     const showSuggestionForError = (error, x, y) => {
+      // Check if overlay still exists before accessing properties
+      if (!this.overlay || !this.overlay.parentNode) {
+        return;
+      }
+
       // Convert overlay-relative position to absolute
       const overlayRect = this.overlay.getBoundingClientRect();
       const underline = document.createElement('div');
@@ -551,7 +1012,7 @@ class FieldChecker {
         height: 20px;
         pointer-events: none;
       `;
-      
+
       this.grammarChecker.showSuggestionPopup(error, {
         left: x,
         top: y,
@@ -559,67 +1020,77 @@ class FieldChecker {
         right: x + 1
       }, this.field);
     };
-    
+
     let hoverTimeout;
     let lastHoveredError = null;
-    
+
     // Track mouse position over the field
     const mousemoveHandler = (e) => {
       // Clear any pending timeout
       clearTimeout(hoverTimeout);
-      
+
       // Check if overlay still exists (might have been removed after ignoring)
       if (!this.overlay || !this.overlay.parentNode) {
         return;
       }
-      
+
       // Get mouse position relative to the field
       const fieldRect = this.field.getBoundingClientRect();
       const x = e.clientX;
       const y = e.clientY;
-      
+
       // Check if mouse is within field bounds
-      if (x < fieldRect.left || x > fieldRect.right || 
-          y < fieldRect.top || y > fieldRect.bottom) {
+      if (x < fieldRect.left || x > fieldRect.right ||
+        y < fieldRect.top || y > fieldRect.bottom) {
         return;
       }
-      
+
+      // Double-check overlay still exists (might have been removed while processing)
+      if (!this.overlay || !this.overlay.parentNode) {
+        return;
+      }
+
       // Find which error (if any) the mouse is over
+      // Triple-check overlay still exists before accessing properties
+      if (!this.overlay || !this.overlay.parentNode) {
+        return;
+      }
+
       const underlines = this.overlay.querySelectorAll('.grammar-underline');
       const overlayRect = this.overlay.getBoundingClientRect();
       const mouseX = x - overlayRect.left;
       const mouseY = y - overlayRect.top;
-      
+
       let foundError = null;
       underlines.forEach(underline => {
         const errorData = JSON.parse(underline.dataset.error);
         const underlineRect = underline.getBoundingClientRect();
         const relX = underlineRect.left - overlayRect.left;
         const relY = underlineRect.top - overlayRect.top;
-        
+
         if (mouseX >= relX && mouseX <= relX + underlineRect.width &&
-            mouseY >= relY && mouseY <= relY + underlineRect.height) {
+          mouseY >= relY && mouseY <= relY + underlineRect.height) {
           foundError = errorData;
         }
       });
-      
+
       if (foundError && foundError !== lastHoveredError) {
         lastHoveredError = foundError;
-        
+
         // Show popup after short delay
         hoverTimeout = setTimeout(() => {
           showSuggestionForError(foundError, x, y);
         }, 200);
       } else if (!foundError) {
         lastHoveredError = null;
-        
+
         // Hide popup after delay
         hoverTimeout = setTimeout(() => {
           this.grammarChecker.hideSuggestionPopup();
         }, 300);
       }
     };
-    
+
     const mouseleaveHandler = () => {
       clearTimeout(hoverTimeout);
       lastHoveredError = null;
@@ -629,18 +1100,18 @@ class FieldChecker {
         }
       }, 300);
     };
-    
+
     // Add event listeners
     this.field.addEventListener('mousemove', mousemoveHandler);
     this.field.addEventListener('mouseleave', mouseleaveHandler);
-    
+
     // Store handlers for cleanup
     this._hoverHandlers = {
       mousemove: mousemoveHandler,
       mouseleave: mouseleaveHandler
     };
   }
-  
+
   getTextNodes(element) {
     const textNodes = [];
     const walker = document.createTreeWalker(
@@ -649,7 +1120,7 @@ class FieldChecker {
       null,
       false
     );
-    
+
     let node;
     while (node = walker.nextNode()) {
       if (node.textContent.trim()) {
@@ -658,14 +1129,14 @@ class FieldChecker {
     }
     return textNodes;
   }
-  
+
   getAllNodes(element) {
     const nodes = [];
     const walker = document.createTreeWalker(
       element,
       NodeFilter.SHOW_ALL,
       {
-        acceptNode: function(node) {
+        acceptNode: function (node) {
           // Accept text nodes and BR elements
           if (node.nodeType === Node.TEXT_NODE || node.nodeName === 'BR') {
             return NodeFilter.FILTER_ACCEPT;
@@ -675,24 +1146,25 @@ class FieldChecker {
       },
       false
     );
-    
+
     let node;
     while (node = walker.nextNode()) {
       nodes.push(node);
     }
     return nodes;
   }
-  
+
   getMirrorRect(startIndex, length) {
     // Create a mirror div that mimics the textarea/input
     const mirror = document.createElement('div');
     const fieldStyles = window.getComputedStyle(this.field);
     const fieldRect = this.field.getBoundingClientRect();
-    
+
+    // Use fixed positioning to match the field's current viewport position
     mirror.style.cssText = `
-      position: absolute;
-      top: ${fieldRect.top + window.scrollY}px;
-      left: ${fieldRect.left + window.scrollX}px;
+      position: fixed;
+      top: ${fieldRect.top}px;
+      left: ${fieldRect.left}px;
       visibility: hidden;
       white-space: pre-wrap;
       word-wrap: break-word;
@@ -700,7 +1172,7 @@ class FieldChecker {
       pointer-events: none;
       max-width: ${fieldRect.width}px;
     `;
-    
+
     // Copy all relevant styles
     const stylesToCopy = [
       'font-family', 'font-size', 'font-weight', 'font-style',
@@ -708,45 +1180,46 @@ class FieldChecker {
       'padding', 'border', 'width', 'box-sizing',
       'padding-top', 'padding-left', 'padding-right', 'padding-bottom'
     ];
-    
+
     stylesToCopy.forEach(style => {
       mirror.style[style] = fieldStyles[style];
     });
-    
+
     const text = this.getFieldText();
     const textBefore = text.substring(0, startIndex);
     const errorText = text.substring(startIndex, startIndex + length);
-    
+
     // Build the mirror content with a marker span
+    // IMPORTANT: Convert ALL newlines to <br> tags, including in the error text
     const escapedBefore = this.escapeHtml(textBefore).replace(/\n/g, '<br>');
-    const escapedError = this.escapeHtml(errorText);
+    const escapedError = this.escapeHtml(errorText).replace(/\n/g, '<br>');
     const escapedAfter = this.escapeHtml(text.substring(startIndex + length)).replace(/\n/g, '<br>');
-    
-    mirror.innerHTML = escapedBefore + 
+
+    mirror.innerHTML = escapedBefore +
       '<span id="error-marker" style="display: inline; background: rgba(255,0,0,0.2);">' + escapedError + '</span>' +
       escapedAfter;
-    
+
     document.body.appendChild(mirror);
     const marker = mirror.querySelector('#error-marker');
-    
+
     if (!marker) {
       console.error('Error marker not found in mirror');
       document.body.removeChild(mirror);
       return null;
     }
-    
+
     const rect = marker.getBoundingClientRect();
     document.body.removeChild(mirror);
-    
+
     // Validate the rect before returning
     if (!rect || rect.width === 0 || rect.width > fieldRect.width * 2) {
       console.warn('Invalid rect from mirror for text:', errorText, rect);
       return null;
     }
-    
+
     return rect;
   }
-  
+
   escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -762,7 +1235,7 @@ class FieldChecker {
       this.overlay = null;
       this.hoverTracked = false;
     }
-    
+
     // Remove hover tracking event listeners
     if (this._hoverHandlers) {
       this.field.removeEventListener('mousemove', this._hoverHandlers.mousemove);
@@ -846,6 +1319,14 @@ class SuggestionPopup {
   }
 
   applyCorrection() {
+    // Get the field checker
+    const checker = this.grammarChecker.attachedFields.get(this.field);
+    
+    // Set flag to prevent removing all highlights
+    if (checker) {
+      checker.isApplyingCorrection = true;
+    }
+
     if (this.field.contentEditable === 'true') {
       // For contentEditable, walk through text nodes and replace
       const walker = document.createTreeWalker(
@@ -854,7 +1335,7 @@ class SuggestionPopup {
         null,
         false
       );
-      
+
       let textNode;
       while (textNode = walker.nextNode()) {
         if (textNode.textContent.includes(this.error.error)) {
@@ -873,35 +1354,57 @@ class SuggestionPopup {
     this.field.dispatchEvent(new Event('input', { bubbles: true }));
     this.field.dispatchEvent(new Event('change', { bubbles: true }));
 
-    // Get the field checker
-    const checker = this.grammarChecker.attachedFields.get(this.field);
-    
     // IMMEDIATELY remove the underline for this specific error AND any overlapping errors
     if (checker && checker.overlay) {
       const underlines = checker.overlay.querySelectorAll('.grammar-underline');
       const fixedText = this.error.error;
-      
+
       underlines.forEach(underline => {
         const errorData = JSON.parse(underline.dataset.error);
-        
+
         // Remove if:
         // 1. Exact match: errorData.error === this.error.error
         // 2. Overlapping: the error contains or is contained by the fixed text
-        const shouldRemove = 
+        const shouldRemove =
           errorData.error === fixedText ||
           errorData.error.includes(fixedText) ||
           fixedText.includes(errorData.error);
-        
+
         if (shouldRemove) {
           underline.remove();
         }
       });
-      
+
+      // Remove the error from the errors array
+      checker.errors = checker.errors.filter(err => {
+        const shouldRemove =
+          err.error === fixedText ||
+          err.error.includes(fixedText) ||
+          fixedText.includes(err.error);
+        return !shouldRemove;
+      });
+
       // If no more underlines, remove the overlay entirely
       if (checker.overlay.querySelectorAll('.grammar-underline').length === 0) {
         checker.removeOverlay();
       }
     }
+
+    // Immediately recalculate positions of remaining highlights
+    // This prevents them from appearing in wrong positions after the text change
+    if (checker && checker.overlay && checker.errors.length > 0) {
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        checker.updateUnderlinePositions();
+      });
+    }
+
+    // Reset flag after a short delay
+    setTimeout(() => {
+      if (checker) {
+        checker.isApplyingCorrection = false;
+      }
+    }, 100);
 
     // Show success feedback
     const btn = this.element.querySelector('[data-action="apply"]');
@@ -910,7 +1413,7 @@ class SuggestionPopup {
 
     setTimeout(() => {
       this.grammarChecker.hideSuggestionPopup();
-      
+
       // Re-check the field after a delay (in case there are other errors)
       if (checker) {
         checker.scheduleCheck();
@@ -921,38 +1424,38 @@ class SuggestionPopup {
   ignoreError() {
     // Add error to ignored list
     this.grammarChecker.ignoredErrors.add(this.error.error);
-    
+
     // Clear the check cache so ignored errors don't reappear
     this.grammarChecker.checkCache.clear();
-    
+
     // Get the field checker
     const checker = this.grammarChecker.attachedFields.get(this.field);
-    
+
     // Remove the underline(s) for this specific error
     if (checker && checker.overlay) {
       const underlines = checker.overlay.querySelectorAll('.grammar-underline');
       const errorText = this.error.error;
-      
+
       underlines.forEach(underline => {
         const errorData = JSON.parse(underline.dataset.error);
-        
+
         // Remove if it's the same error
         if (errorData.error === errorText) {
           underline.remove();
         }
       });
-      
+
       // If no more underlines, remove the overlay entirely
       if (checker.overlay.querySelectorAll('.grammar-underline').length === 0) {
         checker.removeOverlay();
       }
     }
-    
+
     // Show feedback
     const btn = this.element.querySelector('[data-action="ignore"]');
     btn.textContent = '✓ Ignored';
     btn.disabled = true;
-    
+
     // Hide popup after a brief delay
     setTimeout(() => {
       this.grammarChecker.hideSuggestionPopup();

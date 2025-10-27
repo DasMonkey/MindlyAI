@@ -2,9 +2,15 @@
 
 /* Overlay for underlines */
 .grammar-overlay {
-  position: absolute;
+  position: fixed;
   pointer-events: none;
   user-select: none;
+  overflow: hidden !important;
+  clip-path: inset(0px);
+  -webkit-clip-path: inset(0px);
+  box-sizing: border-box;
+  border-radius: inherit;
+  contain: paint;
 }
 
 /* Individual underline */
@@ -16,6 +22,8 @@
   transition: all 0.15s ease-in-out;
   /* Semi-transparent background ensures entire area is visible, not just dots */
   background: rgba(255, 68, 68, 0.08);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* Suggestion Popup */
