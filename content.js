@@ -689,6 +689,10 @@ async function generateSocialContent() {
     content = await getPageText();
   }
   
+  // Open sidebar first
+  chrome.runtime.sendMessage({ action: 'openSidePanel' });
+  
+  // Then send the content generation request
   chrome.runtime.sendMessage({
     action: 'generateContent',
     task: 'social-content',
@@ -696,7 +700,6 @@ async function generateSocialContent() {
     url: window.location.href,
     title: document.title
   });
-  chrome.runtime.sendMessage({ action: 'openSidePanel' });
 }
 
 async function saveBookmark() {
@@ -955,20 +958,16 @@ async function textToSpeech() {
     const chunks = splitIntoChunks(selectedText, 500); // 500 chars per chunk
     console.log(`📄 Split into ${chunks.length} chunks`);
     
-    // Build speed instruction based on speed value
+    // Map speed to instruction
     let speedInstruction = '';
-    if (settings.speechSpeed < 0.8) {
-      speedInstruction = 'very slowly';
-    } else if (settings.speechSpeed < 1.0) {
-      speedInstruction = 'slowly';
-    } else if (settings.speechSpeed > 1.5) {
-      speedInstruction = 'very quickly';
-    } else if (settings.speechSpeed > 1.2) {
+    if (settings.speechSpeed <= 0.98) {
+      speedInstruction = 'in a calm and clear voice';
+    } else if (settings.speechSpeed >= 1.4) {
       speedInstruction = 'quickly';
     } else {
-      speedInstruction = 'at a normal pace';
+      speedInstruction = 'in a natural voice';
     }
-    
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
     
     // Generate audio for each chunk
@@ -986,7 +985,7 @@ async function textToSpeech() {
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{ text: `Read the following text ${speedInstruction} in a clear and natural voice: ${chunks[i]}` }]
+            parts: [{ text: `Read this ${speedInstruction}: ${chunks[i]}` }]
           }],
           generationConfig: {
             responseModalities: ['AUDIO'],

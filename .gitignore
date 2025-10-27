@@ -1,0 +1,79 @@
+# Test Files (Testing & Debugging)
+test-*.html
+test-availability.html
+test-now.html
+test-grammar.html
+test-textfield.html
+*check*.js
+check-builtin-ai-availability.js
+
+# Temporary/Personal Documentation (optional - uncomment if you want to exclude these)
+# BUILT-IN-AI-EXPLAINED.md
+# BUILT-IN-AI-GUIDE.md
+# HACKATHON-CRITICAL-STRATEGY.md
+# HACKATHON-REALITY-CHECK.md
+# USER-ACCOUNT-SYSTEM.md
+# HACKATHON-SUBMISSION.md
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Build/Compiled Files (if you add build process later)
+dist/
+build/
+out/
+*.min.js
+*.min.css
+
+# Package Manager (if you use npm/yarn later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Chrome Extension Specific
+*.crx
+*.pem
+*.zip
+!icons/*.png
+
+# Debug Files
+debug.log
+error.log
+

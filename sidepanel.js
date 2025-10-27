@@ -39,14 +39,14 @@ function showPDFPageModal() {
     const input = document.getElementById('pdfPageInput');
     const confirmBtn = document.getElementById('pdfPageConfirm');
     const cancelBtn = document.getElementById('pdfPageCancel');
-    
+
     // Reset and show modal
     input.value = '1';
     modal.style.display = 'flex';
-    
+
     // Focus on input
     setTimeout(() => input.focus(), 100);
-    
+
     // Handle confirm
     const handleConfirm = () => {
       const pageNum = parseInt(input.value) || 1;
@@ -54,14 +54,14 @@ function showPDFPageModal() {
       cleanup();
       resolve(pageNum);
     };
-    
+
     // Handle cancel
     const handleCancel = () => {
       modal.style.display = 'none';
       cleanup();
       resolve(1); // Default to page 1
     };
-    
+
     // Handle Enter key
     const handleKeyPress = (e) => {
       if (e.key === 'Enter') {
@@ -70,20 +70,27 @@ function showPDFPageModal() {
         handleCancel();
       }
     };
-    
+
     // Cleanup function
     const cleanup = () => {
       confirmBtn.removeEventListener('click', handleConfirm);
       cancelBtn.removeEventListener('click', handleCancel);
       input.removeEventListener('keypress', handleKeyPress);
     };
-    
+
     // Add event listeners
     confirmBtn.addEventListener('click', handleConfirm);
     cancelBtn.addEventListener('click', handleCancel);
     input.addEventListener('keypress', handleKeyPress);
   });
 }
+
+// User account state
+let userAccount = {
+  isLoggedIn: false,
+  credits: 0,
+  email: null
+};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -92,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentPageTab = { id: null, url: null };
   pageContent = null;
   sessionActivity = { hasInteraction: false, source: null };
-  
+
   await loadApiKey();
   await loadTargetLanguageUI();
   await loadMindyVoiceUI();
@@ -101,6 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadHistory();
   await loadClipboardHistory();
   await loadPDFModeFromStorage();
+  await loadUserAccount();
   setupEventListeners();
   checkApiStatus();
   startClipboardMonitoring();
@@ -124,7 +132,7 @@ async function loadApiKey() {
 function checkApiStatus() {
   const statusIndicator = document.getElementById('apiStatus');
   const statusText = document.getElementById('apiStatusText');
-  
+
   if (apiKey) {
     statusIndicator.classList.add('active');
     statusText.textContent = 'API Key configured';
@@ -138,42 +146,43 @@ function checkApiStatus() {
 function setupEventListeners() {
   // Save API Key
   document.getElementById('saveApiKey').addEventListener('click', saveApiKey);
-  
+
   // Save language preference
   document.getElementById('saveLanguage').addEventListener('click', saveLanguagePreference);
-  
+
   // Save Mindy voice
   document.getElementById('saveMindyVoice').addEventListener('click', saveMindyVoice);
-  
+
   // Save TTS settings
   document.getElementById('saveTTSSettings').addEventListener('click', saveTTSSettings);
-  
-  // Speech speed slider
-  const speedSlider = document.getElementById('ttsSpeechSpeed');
-  const speedValue = document.getElementById('ttsSpeechSpeedValue');
-  speedSlider.addEventListener('input', (e) => {
-    speedValue.textContent = `${parseFloat(e.target.value).toFixed(1)}x`;
-  });
-  
+
+  // Speech speed buttons with auto-save
+  document.getElementById('ttsSpeedSlow').addEventListener('click', () => setTTSSpeed(0.98));
+  document.getElementById('ttsSpeedNormal').addEventListener('click', () => setTTSSpeed(1.0));
+  document.getElementById('ttsSpeedFast').addEventListener('click', () => setTTSSpeed(1.4));
+
   // Tab switching
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
-  
+
   // Action buttons
   document.getElementById('copyBtn').addEventListener('click', copyResult);
   document.getElementById('downloadBtn').addEventListener('click', downloadResult);
   document.getElementById('regenerateBtn').addEventListener('click', regenerateContent);
-  
+
   // History
   document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
-  
+
   // Clipboard
   document.getElementById('clearClipboardBtn').addEventListener('click', clearClipboard);
-  
+
   // Bookmarks
   document.getElementById('clearAllBookmarksBtn').addEventListener('click', clearAllBookmarks);
-  
+
+  // Auth button
+  document.getElementById('authButton').addEventListener('click', handleAuthClick);
+
   // Chat
   document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
   document.getElementById('chatInput').addEventListener('keypress', (e) => {
@@ -184,7 +193,7 @@ function setupEventListeners() {
   });
   document.getElementById('clearChatBtn').addEventListener('click', clearChat);
   document.getElementById('chatRefreshBtn').addEventListener('click', startFreshChatSession);
-  
+
   // Call Mindy
   document.getElementById('mindyStartBtn').addEventListener('click', startMindyCall);
   document.getElementById('mindyRefreshBtn').addEventListener('click', startFreshMindySession);
@@ -218,12 +227,16 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'generateContent') {
+    // Ignore textAssist tasks - they're handled in background.js
+    if (request.task === 'textAssist') {
+      return;
+    }
     currentTask = request;
     displayCurrentTask();
     generateContent(request);
   } else if (request.action === 'switchToChat') {
     switchTab('chat');
-    loadPageContent();
+    // Don't load page content yet - wait for user to send first message
   } else if (request.action === 'switchToMindy') {
     switchTab('mindy');
   } else if (request.action === 'translateAndInject') {
@@ -248,7 +261,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.text) {
       // Clear page content so it doesn't interfere
       pageContent = null;
-      
+
       // Pre-fill the chat input so user can click Send
       const chatInput = document.getElementById('chatInput');
       if (chatInput) {
@@ -257,7 +270,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     }
   }
-  
+
   // Handle text assist requests (return response) - MUST come before the return statement
   if (request.action === 'generateContent' && request.task === 'textAssist') {
     handleTextAssist(request.prompt).then(result => {
@@ -278,7 +291,7 @@ function saveApiKey() {
     alert('Please enter an API key');
     return;
   }
-  
+
   chrome.storage.local.set({ geminiApiKey: key }, () => {
     apiKey = key;
     checkApiStatus();
@@ -371,14 +384,44 @@ function getLanguageName(code) {
 function saveTTSSettings() {
   const voice = document.getElementById('ttsVoice').value;
   const maxChars = document.getElementById('ttsMaxChars').value;
-  const speechSpeed = document.getElementById('ttsSpeechSpeed').value;
-  chrome.storage.local.set({ 
+  chrome.storage.local.set({
     ttsVoice: voice,
-    ttsMaxChars: parseInt(maxChars) || 1000,
-    ttsSpeechSpeed: parseFloat(speechSpeed) || 1.0
+    ttsMaxChars: parseInt(maxChars) || 1000
   }, () => {
     alert('TTS settings saved!');
   });
+}
+
+// Set TTS speed and auto-save
+function setTTSSpeed(speed) {
+  chrome.storage.local.set({ ttsSpeechSpeed: speed }, () => {
+    updateSpeedButtonStyles(speed);
+  });
+}
+
+// Update speed button styles to show active state
+function updateSpeedButtonStyles(speed) {
+  const slowBtn = document.getElementById('ttsSpeedSlow');
+  const normalBtn = document.getElementById('ttsSpeedNormal');
+  const fastBtn = document.getElementById('ttsSpeedFast');
+
+  // Reset all buttons
+  [slowBtn, normalBtn, fastBtn].forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-secondary');
+  });
+
+  // Highlight active button
+  if (speed <= 0.98) {
+    slowBtn.classList.remove('btn-secondary');
+    slowBtn.classList.add('btn-primary');
+  } else if (speed >= 1.4) {
+    fastBtn.classList.remove('btn-secondary');
+    fastBtn.classList.add('btn-primary');
+  } else {
+    normalBtn.classList.remove('btn-secondary');
+    normalBtn.classList.add('btn-primary');
+  }
 }
 
 // Load TTS settings for UI
@@ -388,24 +431,20 @@ async function loadTTSSettingsUI() {
       const voice = result.ttsVoice || 'Aoede';
       const maxChars = result.ttsMaxChars || 1000;
       const speechSpeed = result.ttsSpeechSpeed || 1.0;
-      
+
       const voiceSelect = document.getElementById('ttsVoice');
       const maxCharsInput = document.getElementById('ttsMaxChars');
-      const speechSpeedSlider = document.getElementById('ttsSpeechSpeed');
-      const speechSpeedValue = document.getElementById('ttsSpeechSpeedValue');
-      
+
       if (voiceSelect) {
         voiceSelect.value = voice;
       }
       if (maxCharsInput) {
         maxCharsInput.value = maxChars;
       }
-      if (speechSpeedSlider) {
-        speechSpeedSlider.value = speechSpeed;
-      }
-      if (speechSpeedValue) {
-        speechSpeedValue.textContent = `${speechSpeed.toFixed(1)}x`;
-      }
+
+      // Update speed button styles
+      updateSpeedButtonStyles(speechSpeed);
+
       resolve();
     });
   });
@@ -428,10 +467,10 @@ async function loadTTSSettings() {
 async function switchTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  
+
   document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
   document.getElementById(`${tabName}Tab`).classList.add('active');
-  
+
   // Check the current tab and update PDF banner visibility
   if (tabName === 'chat' || tabName === 'mindy') {
     try {
@@ -439,15 +478,28 @@ async function switchTab(tabName) {
       if (tabs[0]) {
         const tab = tabs[0];
         const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
-        
+
         if (!isPDF) {
           // Not a PDF - deactivate PDF mode and hide banner
           pdfMode.isActive = false;
           updatePDFStatusBanner();
         } else {
+          // Check if this is a NEW PDF (different from the stored one)
+          const isNewPDF = !pdfMode.currentTab || 
+                          pdfMode.currentTab.id !== tab.id || 
+                          pdfMode.currentTab.url !== tab.url;
+
+          if (isNewPDF) {
+            // New PDF detected - reset captured pages to start fresh
+            console.log('🆕 New PDF detected, resetting captured pages');
+            pdfMode.capturedPages = [];
+            pdfMode.lastLoadedPage = null;
+          }
+
           // PDF - activate PDF mode and show banner
           pdfMode.isActive = true;
           pdfMode.currentTab = tab;
+          savePDFModeToStorage();
           updatePDFStatusBanner();
         }
       }
@@ -475,7 +527,7 @@ function displayCurrentTask() {
     'mindmap': `🧠 Creating mindmap for: ${currentTask.title}`,
     'social-content': `📱 Generating social content for: ${currentTask.title}`
   };
-  
+
   taskDisplay.innerHTML = `<p>${taskDescriptions[currentTask.task] || 'Processing task...'}</p>`;
 }
 
@@ -485,10 +537,10 @@ async function generateContent(task) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
   }
-  
+
   showLoading(true);
   document.getElementById('actionButtons').style.display = 'none';
-  
+
   try {
     const prompt = await buildPrompt(task);
     const result = await callGeminiApi(prompt);
@@ -501,7 +553,7 @@ async function generateContent(task) {
     const errorMessage = error.message || 'Unknown error occurred';
     showResult(`❌ Error: ${errorMessage}`, 'error');
   }
-  
+
   showLoading(false);
 }
 
@@ -509,7 +561,7 @@ async function generateContent(task) {
 async function buildPrompt(task) {
   const targetLang = await loadTargetLanguage();
   const langName = getLanguageName(targetLang);
-  
+
   const prompts = {
     'summarize': `Create a TLDR summary of the following content. 
 
@@ -522,16 +574,16 @@ RULES:
 
 Content:
 ${task.content}`,
-    
+
     'translate-page': `Please translate the following webpage content to ${langName}. Maintain formatting and structure:\n\n${task.content}`,
-    
+
     'translate-selection': `Please translate the following text to ${langName}:\n\n${task.content}`,
-    
+
     'mindmap': `Create a visual mindmap for the following content. Format it as a centered, branching structure with a main topic in the center (use 🎯 emoji), major branches (use ⭐ emoji), and sub-branches (use • emoji). Make it visually distinct and easy to scan:\n\n${task.content}\n\nFormat example:\n\n🎯 Main Topic\n   │\n   ├─⭐ Major Branch 1\n   │   • Sub-point 1\n   │   • Sub-point 2\n   │\n   ├─⭐ Major Branch 2\n   │   • Sub-point 1\n   │\n   └─⭐ Major Branch 3\n       • Sub-point 1`,
-    
+
     'social-content': `Create viral social media content based on the following webpage. Generate posts for Twitter/X, LinkedIn, and Instagram. Each post should have:\n1. A catchy hook\n2. Main content with value\n3. Call to action\n4. Relevant hashtags\n\nSource content:\n${task.content}\n\nURL: ${task.url}`
   };
-  
+
   return prompts[task.task] || task.content;
 }
 
@@ -539,7 +591,7 @@ ${task.content}`,
 async function callGeminiApi(prompt, imageParts = null) {
   // Use latest lite model
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent?key=${apiKey}`;
-  
+
   // Build parts array
   let parts = [];
   if (imageParts && imageParts.length > 0) {
@@ -547,9 +599,9 @@ async function callGeminiApi(prompt, imageParts = null) {
   } else {
     parts = [{ text: prompt }];
   }
-  
+
   console.log('📤 Calling Gemini API with prompt length:', prompt.length);
-  
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -567,13 +619,13 @@ async function callGeminiApi(prompt, imageParts = null) {
       }
     })
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
     console.error('API Error Response:', error);
     throw new Error(error.error?.message || `API request failed: ${response.status}`);
   }
-  
+
   const data = await response.json();
   console.log('API Response:', data);
   console.log('API Response structure check:', {
@@ -584,19 +636,19 @@ async function callGeminiApi(prompt, imageParts = null) {
     hasParts: !!data.candidates?.[0]?.content?.parts,
     partsLength: data.candidates?.[0]?.content?.parts?.length
   });
-  
+
   // Check if response has expected structure
   if (!data.candidates || !data.candidates[0]) {
     console.error('Unexpected API response structure:', data);
     throw new Error('API returned unexpected response format: missing candidates');
   }
-  
+
   const candidate = data.candidates[0];
   if (!candidate.content) {
     console.error('Unexpected API response structure:', data);
     throw new Error('API returned unexpected response format: missing content');
   }
-  
+
   if (!candidate.content.parts || candidate.content.parts.length === 0) {
     console.error('Unexpected API response structure:', data);
     // Check if content was filtered or blocked
@@ -605,13 +657,13 @@ async function callGeminiApi(prompt, imageParts = null) {
     }
     throw new Error('API returned unexpected response format: missing parts');
   }
-  
+
   // Check if parts[0] exists and has text property
   if (!candidate.content.parts[0]) {
     console.error('Unexpected API response structure:', data);
     throw new Error('API returned unexpected response format: parts array is empty');
   }
-  
+
   // Check for text content
   const text = candidate.content.parts[0].text;
   if (!text) {
@@ -619,7 +671,7 @@ async function callGeminiApi(prompt, imageParts = null) {
     console.error('parts[0]:', candidate.content.parts[0]);
     throw new Error('API returned unexpected response format: text content is missing');
   }
-  
+
   return text;
 }
 
@@ -628,16 +680,16 @@ async function callGeminiVisionApi(prompt, imageBase64) {
   if (!apiKey) {
     throw new Error('API key not configured');
   }
-  
+
   console.log('📤 Calling Gemini Vision API');
   console.log('Prompt:', prompt.substring(0, 100) + '...');
   console.log('Image data length:', imageBase64.length);
-  
+
   // Remove data URL prefix if present
   const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
-  
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -663,21 +715,21 @@ async function callGeminiVisionApi(prompt, imageBase64) {
       }
     })
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
     console.error('Vision API Error Response:', error);
     throw new Error(error.error?.message || `Vision API request failed: ${response.status}`);
   }
-  
+
   const data = await response.json();
   console.log('✅ Vision API Response received');
-  
+
   if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
     console.error('Unexpected Vision API response structure:', data);
     throw new Error('Vision API returned unexpected response format');
   }
-  
+
   return data.candidates[0].content.parts[0].text;
 }
 
@@ -685,7 +737,7 @@ async function callGeminiVisionApi(prompt, imageBase64) {
 async function extractPDFPageWithOCR(tabId, pageNumber = null) {
   try {
     console.log('📸 Capturing PDF page screenshot...');
-    
+
     // Get current page number from the PDF viewer if not provided
     if (!pageNumber) {
       try {
@@ -698,30 +750,30 @@ async function extractPDFPageWithOCR(tabId, pageNumber = null) {
               console.log('✅ Found page via PDFViewerApplication.pdfViewer:', pageNum);
               return { page: pageNum, method: 'pdfjs' };
             }
-            
+
             // Chrome's native viewer doesn't expose page numbers to extensions
             console.log('⚠️ Chrome native PDF viewer detected - cannot auto-detect page');
             return { page: null, method: 'chrome-native' };
           }
         });
         const result = pageResults[0]?.result;
-        
-        // For Chrome's native viewer, always ask user
+
+        // For Chrome's native viewer or detection failure, default to page 1
         if (!result || !result.page || result.method === 'chrome-native') {
-          pageNumber = await showPDFPageModal();
-          console.log('👤 User entered page number:', pageNumber);
+          pageNumber = 1;
+          console.log('📄 Using default page 1 (Chrome native viewer or detection failed)');
         } else {
           pageNumber = result.page;
           console.log(`✅ Page detected via ${result.method}:`, pageNumber);
         }
       } catch (e) {
-        console.log('Could not detect page number, asking user:', e.message);
-        pageNumber = await showPDFPageModal();
+        console.log('Could not detect page number, defaulting to page 1:', e.message);
+        pageNumber = 1;
       }
     }
-    
+
     console.log('📄 Detected page number:', pageNumber);
-    
+
     // Capture the visible tab as screenshot
     const dataUrl = await new Promise((resolve, reject) => {
       chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
@@ -732,25 +784,25 @@ async function extractPDFPageWithOCR(tabId, pageNumber = null) {
         }
       });
     });
-    
+
     console.log('✅ Screenshot captured, size:', dataUrl.length);
-    
+
     // Use Gemini Vision API to extract text from screenshot
     const prompt = `Extract all text from this PDF page. Return only the text content, maintaining paragraph structure and formatting. Be thorough and accurate.`;
-    
+
     const extractedText = await callGeminiVisionApi(prompt, dataUrl);
-    
+
     console.log('✅ OCR extraction complete, length:', extractedText.length);
-    
+
     // Apply context limit safeguards
     const maxChars = 10000;
     const truncated = extractedText.length > maxChars;
     const finalText = truncated ? extractedText.substring(0, maxChars) : extractedText;
-    
+
     if (truncated) {
       console.warn(`⚠️ Extracted text is large (${extractedText.length} chars), truncating to ${maxChars}`);
     }
-    
+
     return {
       text: finalText,
       truncated: truncated,
@@ -771,7 +823,7 @@ async function extractPDFPageWithOCR(tabId, pageNumber = null) {
 function addCapturedPage(pageData) {
   // Check if page already exists
   const existingIndex = pdfMode.capturedPages.findIndex(p => p.pageNumber === pageData.pageNumber);
-  
+
   if (existingIndex >= 0) {
     // Update existing page
     pdfMode.capturedPages[existingIndex] = pageData;
@@ -781,15 +833,15 @@ function addCapturedPage(pageData) {
     pdfMode.capturedPages.push(pageData);
     console.log(`📄 Added page ${pageData.pageNumber} to captured pages`);
   }
-  
+
   // Sort by page number
   pdfMode.capturedPages.sort((a, b) => a.pageNumber - b.pageNumber);
-  
+
   pdfMode.lastLoadedPage = pageData.pageNumber;
-  
+
   // Save to storage
   savePDFModeToStorage();
-  
+
   // Update UI
   updatePDFStatusBanner();
 }
@@ -799,33 +851,33 @@ function buildPDFContext() {
   if (pdfMode.capturedPages.length === 0) {
     return 'No PDF pages captured yet.';
   }
-  
+
   let pages = [];
-  
+
   switch (pdfMode.contextMode) {
     case 'single':
       // Only the last loaded page
       pages = pdfMode.capturedPages.filter(p => p.pageNumber === pdfMode.lastLoadedPage);
       break;
-      
+
     case 'accumulate':
       // All captured pages
       pages = pdfMode.capturedPages;
       break;
-      
+
     case 'sliding':
       // Last N pages
       pages = pdfMode.capturedPages.slice(-pdfMode.slidingWindowSize);
       break;
   }
-  
+
   if (pages.length === 0) {
     return 'No PDF pages in current context mode.';
   }
-  
+
   // Build context string
   let context = `PDF Document (${pdfMode.contextMode === 'single' ? 'Page ' + pages[0].pageNumber : pages.length + ' pages'})\n\n`;
-  
+
   pages.forEach((page, idx) => {
     if (pages.length > 1) {
       context += `--- Page ${page.pageNumber} ---\n`;
@@ -835,15 +887,15 @@ function buildPDFContext() {
       context += '\n\n';
     }
   });
-  
+
   // Add metadata
   const totalChars = pages.reduce((sum, p) => sum + p.charCount, 0);
   const estimatedTokens = Math.ceil(totalChars / 4); // Rough estimate: 4 chars per token
-  
+
   if (pdfMode.contextMode !== 'single') {
     context += `\n\n[Context: ${pages.length} page(s), ~${estimatedTokens} tokens]`;
   }
-  
+
   return context;
 }
 
@@ -865,7 +917,7 @@ function clearCapturedPages(pageNumber = null) {
     pdfMode.lastLoadedPage = null;
     console.log('🗑️ Cleared all captured pages');
   }
-  
+
   savePDFModeToStorage();
   updatePDFStatusBanner();
 }
@@ -898,17 +950,17 @@ function updatePDFStatusBanner() {
     document.getElementById('pdfStatusBannerMindy').style.display = 'none';
     return;
   }
-  
+
   // Save current input value before regenerating HTML
   const currentInputValue = document.getElementById('pdfPageNumberInput')?.value || '1';
-  
+
   // Build banner HTML
   const capturedPagesList = pdfMode.capturedPages.map(p => p.pageNumber).join(', ');
   const totalPages = pdfMode.capturedPages.length;
   const tokens = calculatePDFTokens();
   const maxTokens = 128000; // Gemini 2.0 Flash limit
   const tokenPercent = (tokens / maxTokens) * 100;
-  
+
   let bannerHTML = `
     <div class="pdf-banner-header">
       <div class="pdf-banner-title">
@@ -922,7 +974,7 @@ function updatePDFStatusBanner() {
       </div>
     </div>
   `;
-  
+
   if (totalPages > 0) {
     bannerHTML += `
       <div class="pdf-banner-pages">
@@ -965,36 +1017,36 @@ function updatePDFStatusBanner() {
       </div>
     `;
   }
-  
+
   // Update both banners
   document.getElementById('pdfStatusBannerChat').innerHTML = bannerHTML;
   document.getElementById('pdfStatusBannerMindy').innerHTML = bannerHTML;
   document.getElementById('pdfStatusBannerChat').style.display = 'block';
   document.getElementById('pdfStatusBannerMindy').style.display = 'block';
-  
+
   // Restore the input value after HTML regeneration
   const restoredInputs = document.querySelectorAll('#pdfPageNumberInput');
   restoredInputs.forEach(input => {
     input.value = currentInputValue;
   });
-  
+
   // Add event listeners after HTML is inserted (CSP-compliant, no inline onclick)
   const setupBannerListeners = (bannerId) => {
     const banner = document.getElementById(bannerId);
     if (!banner) return;
-    
+
     // Recapture button - pass the banner reference so it can find the correct input
     const recaptureBtn = banner.querySelector('#pdfRecaptureBtn');
     if (recaptureBtn) {
       recaptureBtn.addEventListener('click', () => recapturePDFPage(banner));
     }
-    
+
     // Clear all button
     const clearAllBtn = banner.querySelector('#pdfClearAllBtn');
     if (clearAllBtn) {
       clearAllBtn.addEventListener('click', () => clearCapturedPages());
     }
-    
+
     // Page badge close buttons
     banner.querySelectorAll('.pdf-page-badge-close').forEach(closeBtn => {
       closeBtn.addEventListener('click', (e) => {
@@ -1004,7 +1056,7 @@ function updatePDFStatusBanner() {
       });
     });
   };
-  
+
   setupBannerListeners('pdfStatusBannerChat');
   setupBannerListeners('pdfStatusBannerMindy');
 }
@@ -1015,18 +1067,18 @@ async function recapturePDFPage(bannerElement) {
     alert('No PDF tab found');
     return;
   }
-  
+
   try {
     // Get page number from inline input within the specific banner
     const pageInput = bannerElement ? bannerElement.querySelector('#pdfPageNumberInput') : document.getElementById('pdfPageNumberInput');
     const pageNumber = pageInput ? parseInt(pageInput.value) || 1 : 1;
-    
+
     console.log('🔄 Starting recapture for tab:', pdfMode.currentTab.id);
     console.log('📋 Banner element:', bannerElement?.id || 'none');
     console.log('📋 Input element:', pageInput);
     console.log('📋 Input value:', pageInput?.value);
     console.log('📋 Parsed page number:', pageNumber);
-    
+
     // Hide popup
     await chrome.scripting.executeScript({
       target: { tabId: pdfMode.currentTab.id },
@@ -1035,19 +1087,19 @@ async function recapturePDFPage(bannerElement) {
         if (popup) popup.style.display = 'none';
       }
     });
-    
+
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // Extract PDF content with specified page number
     console.log('📸 Extracting PDF content...');
     const result = await extractPDFPageWithOCR(pdfMode.currentTab.id, pageNumber);
     console.log('✅ Extraction complete. Page:', result.pageNumber, 'Length:', result.charCount);
-    
+
     // Update the viewing page
     pdfMode.userViewingPage = result.pageNumber;
-    
+
     addCapturedPage(result);
-    
+
     // Restore popup
     await chrome.scripting.executeScript({
       target: { tabId: pdfMode.currentTab.id },
@@ -1056,14 +1108,14 @@ async function recapturePDFPage(bannerElement) {
         if (popup) popup.style.display = '';
       }
     });
-    
+
     // Rebuild context
     pageContent = buildPDFContext();
     console.log('📄 Context rebuilt, total pages:', pdfMode.capturedPages.length);
-    
+
     // Update banner
     updatePDFStatusBanner();
-    
+
     // Log success without popup
     console.log(`✅ Page ${result.pageNumber} captured! ${result.charCount} characters. Total pages: ${pdfMode.capturedPages.length}`);
   } catch (error) {
@@ -1090,10 +1142,10 @@ function showLoading(show) {
 // Show result
 function showResult(content, type) {
   const resultDiv = document.getElementById('result');
-  
+
   // Convert markdown to HTML for better display
   const htmlContent = convertMarkdownToHtml(content);
-  
+
   resultDiv.innerHTML = htmlContent;
   resultDiv.className = `result-content ${type}`;
 }
@@ -1101,27 +1153,27 @@ function showResult(content, type) {
 // Convert markdown to HTML
 function convertMarkdownToHtml(markdown) {
   let html = markdown;
-  
+
   // Remove markdown headers (##, ###, etc) and make them bold
   html = html.replace(/^#{1,6}\s+(.+)$/gm, '<strong>$1</strong>');
-  
+
   // Bold text **text** or __text__
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-  
+
   // Italic text *text* or _text_
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
   html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-  
+
   // Bullet points (- item or * item)
   html = html.replace(/^[\-\*]\s+(.+)$/gm, '• $1');
-  
+
   // Numbered lists (1. item)
   html = html.replace(/^\d+\.\s+(.+)$/gm, '→ $1');
-  
+
   // Line breaks
   html = html.replace(/\n/g, '<br>');
-  
+
   return html;
 }
 
@@ -1163,12 +1215,12 @@ function saveToHistory(task, result) {
       fullResult: result,
       timestamp: new Date().toISOString()
     });
-    
+
     // Keep only last 50 items
     if (history.length > 50) {
       history.length = 50;
     }
-    
+
     chrome.storage.local.set({ history }, () => {
       loadHistory();
     });
@@ -1180,12 +1232,12 @@ async function loadBookmarks() {
   chrome.storage.local.get(['bookmarks'], (result) => {
     const bookmarks = result.bookmarks || [];
     const listDiv = document.getElementById('bookmarksList');
-    
+
     if (bookmarks.length === 0) {
       listDiv.innerHTML = '<p class="placeholder">No bookmarks saved yet.</p>';
       return;
     }
-    
+
     // Group bookmarks by domain
     const grouped = {};
     bookmarks.forEach((bookmark, index) => {
@@ -1195,16 +1247,16 @@ async function loadBookmarks() {
       }
       grouped[domain].push({ ...bookmark, originalIndex: index });
     });
-    
+
     // Sort domains alphabetically
     const sortedDomains = Object.keys(grouped).sort();
-    
+
     // Render grouped bookmarks with collapsible functionality
     listDiv.innerHTML = sortedDomains.map((domain, groupIndex) => {
       const domainBookmarks = grouped[domain];
       const favicon = domainBookmarks[0].favicon || '';
       const groupId = `bookmark-group-${groupIndex}`;
-      
+
       return `
         <div class="bookmark-group">
           <div class="bookmark-group-header" data-group-id="${groupId}">
@@ -1230,7 +1282,7 @@ async function loadBookmarks() {
         </div>
       `;
     }).join('');
-    
+
     // Add event listeners for group headers (toggle collapse)
     document.querySelectorAll('#bookmarksList .bookmark-group-header').forEach(header => {
       header.addEventListener('click', (e) => {
@@ -1238,7 +1290,7 @@ async function loadBookmarks() {
         toggleBookmarkGroup(groupId);
       });
     });
-    
+
     // Add event listeners for delete buttons
     document.querySelectorAll('#bookmarksList .btn-danger').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1255,7 +1307,7 @@ async function loadBookmarks() {
 function toggleBookmarkGroup(groupId) {
   const group = document.getElementById(groupId);
   const toggle = document.getElementById(`${groupId}-toggle`);
-  
+
   if (group.style.display === 'none') {
     group.style.display = 'block';
     toggle.textContent = '▼';
@@ -1279,7 +1331,7 @@ function deleteBookmark(index) {
 // Clear all bookmarks
 function clearAllBookmarks() {
   if (!confirm('Delete all bookmarks?')) return;
-  
+
   chrome.storage.local.set({ bookmarks: [] }, () => {
     loadBookmarks();
   });
@@ -1291,26 +1343,26 @@ async function organizeBookmarks() {
     alert('Please configure your API key first!');
     return;
   }
-  
+
   chrome.storage.local.get(['bookmarks'], async (result) => {
     const bookmarks = result.bookmarks || [];
     if (bookmarks.length === 0) {
       alert('No bookmarks to organize!');
       return;
     }
-    
+
     showLoading(true);
-    
+
     try {
       const bookmarkTexts = bookmarks.map(b => b.text).join('\n---\n');
       const prompt = `Analyze the following bookmarks and organize them into logical groups. For each group, provide a name and list the bookmarks that belong to it. Format as:\n\nGroup: [Name]\n- Bookmark text\n- Bookmark text\n\nBookmarks:\n${bookmarkTexts}`;
-      
+
       const result = await callGeminiApi(prompt);
       displayOrganizedGroups(result);
     } catch (error) {
       alert('Error organizing bookmarks: ' + error.message);
     }
-    
+
     showLoading(false);
   });
 }
@@ -1319,7 +1371,7 @@ async function organizeBookmarks() {
 function displayOrganizedGroups(groups) {
   const groupsSection = document.getElementById('groupsSection');
   const groupsList = document.getElementById('groupsList');
-  
+
   groupsSection.style.display = 'block';
   groupsList.innerHTML = `<div class="group-item"><pre style="white-space: pre-wrap; color: rgba(255,255,255,0.9);">${groups}</pre></div>`;
 }
@@ -1329,12 +1381,12 @@ async function loadHistory() {
   chrome.storage.local.get(['history'], (result) => {
     const history = result.history || [];
     const listDiv = document.getElementById('historyList');
-    
+
     if (history.length === 0) {
       listDiv.innerHTML = '<p class="placeholder">No history yet.</p>';
       return;
     }
-    
+
     listDiv.innerHTML = history.map((item, index) => `
       <div class="history-item">
         <div class="history-task">${getTaskIcon(item.task)} ${item.title}</div>
@@ -1404,76 +1456,38 @@ async function loadPageContent() {
       pageContent = 'No active tab found.';
       return;
     }
-    
+
     const tab = tabs[0];
-    
+
     // Check if this is a PDF
     const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
-    
+
     if (isPDF) {
-      console.log('📄 PDF detected in chat, using OCR extraction...');
-      
-      // Activate PDF mode
+      console.log('📄 PDF detected in chat');
+
+      // Activate PDF mode but DON'T capture yet
       pdfMode.isActive = true;
       pdfMode.currentTab = tab;
+      updatePDFStatusBanner();
+
+      // Check if we already have captured pages
+      if (pdfMode.capturedPages.length > 0) {
+        // Use existing captured pages
+        pageContent = buildPDFContext();
+        console.log('✅ Using existing PDF context, length:', pageContent.length);
+      } else {
+        // No pages captured yet - will capture on first message send
+        pageContent = null;
+        console.log('📄 PDF mode active, waiting for user to send message to capture page');
+      }
+
+      return;
     } else {
       // Not a PDF - deactivate PDF mode
       pdfMode.isActive = false;
       updatePDFStatusBanner(); // Hide the banner
     }
-    
-    if (isPDF) {
-      
-      // Hide floating popup before screenshot
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: () => {
-            const popup = document.getElementById('ai-assistant-popup');
-            if (popup) {
-              popup.style.display = 'none';
-            }
-          }
-        });
-      } catch (e) {
-        console.log('Could not hide popup:', e);
-      }
-      
-      // Small delay to ensure popup is hidden
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Extract PDF content using OCR
-      const result = await extractPDFPageWithOCR(tab.id);
-      
-      // Add to captured pages
-      addCapturedPage(result);
-      
-      // Restore popup
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: () => {
-            const popup = document.getElementById('ai-assistant-popup');
-            if (popup) {
-              popup.style.display = '';
-            }
-          }
-        });
-      } catch (e) {
-        console.log('Could not restore popup:', e);
-      }
-      
-      // Build context based on mode
-      pageContent = buildPDFContext();
-      
-      console.log('✅ PDF content loaded for chat, length:', pageContent.length);
-      
-      // Update UI banner
-      updatePDFStatusBanner();
-      
-      return;
-    }
-    
+
     // Regular webpage - use message passing to content script
     return new Promise((resolve) => {
       chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' }, (response) => {
@@ -1502,22 +1516,22 @@ async function checkForTabChange() {
   if (tabs[0]) {
     const newTabId = tabs[0].id;
     const newUrl = tabs[0].url;
-    
+
     // Only check if a conversation session exists (chat or Mindy)
     if (!chatSessionTab.id) {
       return; // No session yet, button should NOT show
     }
-    
+
     const hasChatInteraction = chatHistory.length > 0;
     const hasSessionInteraction = hasChatInteraction || sessionActivity.hasInteraction;
-    
+
     if (!hasSessionInteraction) {
       return; // User hasn't interacted yet, keep button hidden
     }
-    
+
     // Get the currently active sidepanel tab
     const currentTab = document.querySelector('.tab.active')?.dataset.tab;
-    
+
     // Check if this is a different tab or URL
     if (currentPageTab.id && (currentPageTab.id !== newTabId || currentPageTab.url !== newUrl)) {
       // Determine which button to show based on active sidepanel tab
@@ -1527,7 +1541,7 @@ async function checkForTabChange() {
       } else if (currentTab === 'mindy') {
         refreshBtn = document.getElementById('mindyRefreshBtn');
       }
-      
+
       if (refreshBtn) {
         // Check if returning to original session tab
         if (chatSessionTab.id === newTabId && chatSessionTab.url === newUrl) {
@@ -1539,7 +1553,7 @@ async function checkForTabChange() {
         }
       }
     }
-    
+
     // Update tracking
     currentPageTab.id = newTabId;
     currentPageTab.url = newUrl;
@@ -1558,12 +1572,20 @@ async function startFreshChatSession() {
       </div>
     </div>
   `;
-  
+
   // Clear page content and chat history
   pageContent = null;
   chatHistory = [];
   sessionActivity = { hasInteraction: false, source: null };
-  
+
+  // Clear captured PDF pages if in PDF mode
+  if (pdfMode.isActive) {
+    pdfMode.capturedPages = [];
+    pdfMode.lastLoadedPage = null;
+    savePDFModeToStorage();
+    updatePDFStatusBanner();
+  }
+
   // Update session tab to current tab (new session starts here)
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
@@ -1572,16 +1594,16 @@ async function startFreshChatSession() {
     currentPageTab.id = tabs[0].id;
     currentPageTab.url = tabs[0].url;
   }
-  
+
   // Load new page content
   await loadPageContent();
-  
+
   // Hide refresh button
   const refreshBtn = document.getElementById('chatRefreshBtn');
   if (refreshBtn) {
     refreshBtn.style.display = 'none';
   }
-  
+
   console.log('✅ Started fresh chat session with new page');
 }
 
@@ -1592,16 +1614,19 @@ async function startFreshMindySession() {
   mindyTranscript.innerHTML = `
     <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can answer your questions via voice.</p>
   `;
-  
+
   // Clear page content and session activity
   pageContent = null;
   sessionActivity = { hasInteraction: false, source: null };
-  
+
   // Clear captured PDF pages if in PDF mode
   if (pdfMode.isActive) {
     pdfMode.capturedPages = [];
+    pdfMode.lastLoadedPage = null;
+    savePDFModeToStorage();
+    updatePDFStatusBanner();
   }
-  
+
   // Update session tab to current tab (new session starts here)
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
@@ -1610,13 +1635,13 @@ async function startFreshMindySession() {
     currentPageTab.id = tabs[0].id;
     currentPageTab.url = tabs[0].url;
   }
-  
+
   // Hide refresh button
   const refreshBtn = document.getElementById('mindyRefreshBtn');
   if (refreshBtn) {
     refreshBtn.style.display = 'none';
   }
-  
+
   console.log('✅ Started fresh Mindy session with new page');
 }
 
@@ -1624,30 +1649,30 @@ async function startFreshMindySession() {
 async function sendChatMessage() {
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
-  
+
   if (!message) return;
-  
+
   if (!apiKey) {
     alert('Please configure your API key first!');
     return;
   }
-  
+
   // Add user message to chat
   addMessageToChat(message, 'user');
   input.value = '';
   sessionActivity.hasInteraction = true;
   sessionActivity.source = 'chat';
-  
+
   // Show typing indicator
   showTypingIndicator();
-  
+
   try {
     let prompt;
-    
+
     // Check if this is a text improvement request (from text field assistant)
-    if (message.toLowerCase().includes('improve this text:') || 
-        message.toLowerCase().includes('fix this text:') ||
-        message.toLowerCase().includes('rewrite this')) {
+    if (message.toLowerCase().includes('improve this text:') ||
+      message.toLowerCase().includes('fix this text:') ||
+      message.toLowerCase().includes('rewrite this')) {
       // Direct text improvement - no page context needed
       prompt = message;
     } else {
@@ -1655,7 +1680,7 @@ async function sendChatMessage() {
       if (!pageContent) {
         await loadPageContent();
       }
-      
+
       // Initialize chat session ONLY when user sends first message
       if (!chatSessionTab.id) {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1667,26 +1692,43 @@ async function sendChatMessage() {
           console.log('🎯 Chat session initialized on first message with tab:', tabs[0].id, tabs[0].url);
         }
       }
-      
+
+      // For PDFs, capture page 1 if no pages captured yet
+      if (pdfMode.isActive && pdfMode.capturedPages.length === 0) {
+        console.log('📸 Capturing PDF page 1 on first message...');
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]) {
+          const result = await extractPDFPageWithOCR(tabs[0].id, 1);
+          addCapturedPage(result);
+          pageContent = buildPDFContext();
+        }
+      }
+
       // Build context-aware prompt
+      let pdfInstructions = '';
+      if (pdfMode.isActive) {
+        const capturedPageNumbers = pdfMode.capturedPages.map(p => p.pageNumber).join(', ');
+        pdfInstructions = `\n\nIMPORTANT: This is a PDF document. Currently captured pages: ${capturedPageNumbers || 'Page 1'}. If the user asks about content that doesn't appear to be in the captured pages, politely remind them: "I can only see page(s) ${capturedPageNumbers || '1'} of this PDF. If your question is about a different page, please use the page number input in the PDF banner above and click 'Send' to capture that specific page first."`;
+      }
+
       prompt = `You are a helpful assistant answering questions about a webpage. Here is the page content:
 
 ${pageContent ? pageContent.substring(0, 3000) : 'No page content available.'}
 
 User question: ${message}
 
-Please provide a helpful and accurate answer based on the page content above.`;
+Please provide a helpful and accurate answer based on the page content above.${pdfInstructions}`;
     }
-    
+
     // Call API
     const response = await callGeminiApi(prompt);
-    
+
     // Remove typing indicator
     removeTypingIndicator();
-    
+
     // Add AI response to chat
     addMessageToChat(response, 'ai');
-    
+
     // Save to chat history
     chatHistory.push(
       { role: 'user', content: message },
@@ -1703,19 +1745,19 @@ function addMessageToChat(message, role) {
   const chatMessages = document.getElementById('chatMessages');
   const messageDiv = document.createElement('div');
   messageDiv.className = `chat-message ${role === 'user' ? 'user-message' : 'ai-message'}`;
-  
+
   const avatar = role === 'user' ? '👤' : '🤖';
-  
+
   // Convert markdown to HTML for AI messages
   const formattedMessage = role === 'ai' ? convertMarkdownToHtml(message) : message;
-  
+
   messageDiv.innerHTML = `
     <div class="message-avatar">${avatar}</div>
     <div class="message-content">${formattedMessage}</div>
   `;
-  
+
   chatMessages.appendChild(messageDiv);
-  
+
   // Scroll to bottom
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -1726,7 +1768,7 @@ function showTypingIndicator() {
   const typingDiv = document.createElement('div');
   typingDiv.className = 'chat-message ai-message chat-loading';
   typingDiv.id = 'typingIndicator';
-  
+
   typingDiv.innerHTML = `
     <div class="message-avatar">🤖</div>
     <div class="message-content">
@@ -1737,7 +1779,7 @@ function showTypingIndicator() {
       </div>
     </div>
   `;
-  
+
   chatMessages.appendChild(typingDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -1752,8 +1794,7 @@ function removeTypingIndicator() {
 
 // Clear chat and start fresh session
 async function clearChat() {
-  if (!confirm('Are you sure you want to clear the chat history?')) return;
-  
+
   // Clear chat messages except welcome message
   const chatMessages = document.getElementById('chatMessages');
   chatMessages.innerHTML = `
@@ -1764,12 +1805,12 @@ async function clearChat() {
       </div>
     </div>
   `;
-  
+
   // Clear page content and chat history
   pageContent = null;
   chatHistory = [];
   sessionActivity = { hasInteraction: false, source: null };
-  
+
   // Update session tab to current tab (new session starts here)
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
@@ -1778,16 +1819,16 @@ async function clearChat() {
     currentPageTab.id = tabs[0].id;
     currentPageTab.url = tabs[0].url;
   }
-  
+
   // Load new page content
   await loadPageContent();
-  
+
   // Hide refresh button
   const refreshBtn = document.getElementById('chatRefreshBtn');
   if (refreshBtn) {
     refreshBtn.style.display = 'none';
   }
-  
+
   console.log('✅ Chat cleared and fresh session started');
 }
 
@@ -1800,24 +1841,24 @@ async function translateAndReplace(content, tabId, htmlContent) {
     });
     return;
   }
-  
+
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
-    
+
     // Use HTML content if available for better structure preservation
     const contentToTranslate = htmlContent || content;
     const isHTML = !!htmlContent && htmlContent.includes('<');
-    
+
     let prompt;
     if (isHTML) {
       prompt = `Translate the following HTML content to ${langName}. Preserve all HTML tags (<br>, <p>, <div>, etc.) exactly as they are. Only translate the text content inside the tags. Return valid HTML:\n\n${contentToTranslate}`;
     } else {
       prompt = `Translate the following text to ${langName}. Preserve all line breaks and paragraph structure. Only return the translated text:\n\n${contentToTranslate}`;
     }
-    
+
     const translatedText = await callGeminiApi(prompt);
-    
+
     // Send translated text to content script to replace selection
     chrome.tabs.sendMessage(tabId, {
       action: 'replaceSelection',
@@ -1842,14 +1883,14 @@ async function translatePageInPlace(content, tabId) {
     });
     return;
   }
-  
+
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
-    
+
     console.log('Translating page to:', langName);
     console.log('Content length:', content.length);
-    
+
     const prompt = `Translate the following indexed text to ${langName}. Each line starts with [index] followed by text. You must:
 1. Keep the [index] markers exactly as they are
 2. Translate only the text after each [index]
@@ -1859,10 +1900,10 @@ async function translatePageInPlace(content, tabId) {
 
 Text to translate:
 ${content}`;
-    
+
     const translatedText = await callGeminiApi(prompt);
     console.log('Translation received, length:', translatedText.length);
-    
+
     // Send translated text to content script to replace all text nodes
     chrome.tabs.sendMessage(tabId, {
       action: 'replacePageText',
@@ -1887,15 +1928,15 @@ async function translateAndInject(content, tabId) {
     });
     return;
   }
-  
+
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
-    
+
     const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
-    
+
     const translatedText = await callGeminiApi(prompt);
-    
+
     // Send translated text to content script to inject
     chrome.tabs.sendMessage(tabId, {
       action: 'injectTranslation',
@@ -1915,13 +1956,13 @@ function convertPCMtoWAV(pcmData, sampleRate, numChannels, bitsPerSample) {
   const dataLength = pcmData.length;
   const buffer = new ArrayBuffer(44 + dataLength);
   const view = new DataView(buffer);
-  
+
   // WAV file header
   // "RIFF" chunk descriptor
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + dataLength, true);
   writeString(view, 8, 'WAVE');
-  
+
   // "fmt " sub-chunk
   writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true); // fmt chunk size
@@ -1931,16 +1972,16 @@ function convertPCMtoWAV(pcmData, sampleRate, numChannels, bitsPerSample) {
   view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true); // byte rate
   view.setUint16(32, numChannels * bitsPerSample / 8, true); // block align
   view.setUint16(34, bitsPerSample, true);
-  
+
   // "data" sub-chunk
   writeString(view, 36, 'data');
   view.setUint32(40, dataLength, true);
-  
+
   // Write PCM samples
   for (let i = 0; i < pcmData.length; i++) {
     view.setUint8(44 + i, pcmData[i]);
   }
-  
+
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
@@ -1962,9 +2003,9 @@ function updateTTSState(state) {
   // Notify content script about state change
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { 
-        action: 'updateTTSState', 
-        state: state 
+      chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'updateTTSState',
+        state: state
       });
     }
   });
@@ -2011,20 +2052,20 @@ function toggleTTSPlayback() {
 // Split text into chunks (paragraphs or sentences)
 function splitIntoChunks(text, maxChars = 500) {
   const chunks = [];
-  
+
   // First, try splitting by paragraphs
   const paragraphs = text.split(/\n\n+/);
-  
+
   for (const para of paragraphs) {
     if (para.trim().length === 0) continue;
-    
+
     if (para.length <= maxChars) {
       chunks.push(para.trim());
     } else {
       // Split long paragraphs by sentences
       const sentences = para.match(/[^.!?]+[.!?]+/g) || [para];
       let currentChunk = '';
-      
+
       for (const sentence of sentences) {
         if ((currentChunk + sentence).length <= maxChars) {
           currentChunk += sentence;
@@ -2036,7 +2077,7 @@ function splitIntoChunks(text, maxChars = 500) {
       if (currentChunk) chunks.push(currentChunk.trim());
     }
   }
-  
+
   return chunks;
 }
 
@@ -2047,28 +2088,28 @@ async function playNextChunk() {
     console.log('✅ All chunks played');
     return;
   }
-  
+
   const audioBlob = ttsQueue[currentChunkIndex];
   const audioUrl = URL.createObjectURL(audioBlob);
-  
+
   currentAudio = new Audio(audioUrl);
   isPlaying = true;
   updateTTSState('playing');
-  
+
   currentAudio.onerror = (e) => {
     console.error('Audio playback error:', e);
     URL.revokeObjectURL(audioUrl);
     currentChunkIndex++;
     playNextChunk();
   };
-  
+
   currentAudio.onended = () => {
     URL.revokeObjectURL(audioUrl);
     currentChunkIndex++;
     console.log(`🎵 Chunk ${currentChunkIndex}/${ttsQueue.length} finished`);
     playNextChunk();
   };
-  
+
   try {
     await currentAudio.play();
     console.log(`🔊 Playing chunk ${currentChunkIndex + 1}/${ttsQueue.length}`);
@@ -2084,43 +2125,39 @@ async function generateTextToSpeech(content) {
     alert('Please configure your API key first in Settings!');
     return;
   }
-  
+
   try {
     console.log('Generating TTS for:', content.substring(0, 50) + '...');
-    
+
     // Stop any currently playing audio
     stopTTS();
-    
+
     // Load TTS settings
     const settings = await loadTTSSettings();
     console.log('Using voice:', settings.voice, 'Max chars:', settings.maxChars, 'Speed:', settings.speechSpeed);
-    
+
     // Split content into chunks
     const chunks = splitIntoChunks(content, 500); // 500 chars per chunk
     console.log(`📄 Split into ${chunks.length} chunks`);
-    
-    // Build speed instruction based on speed value
+
+    // Map speed to instruction
     let speedInstruction = '';
-    if (settings.speechSpeed < 0.8) {
-      speedInstruction = 'very slowly';
-    } else if (settings.speechSpeed < 1.0) {
-      speedInstruction = 'slowly';
-    } else if (settings.speechSpeed > 1.5) {
-      speedInstruction = 'very quickly';
-    } else if (settings.speechSpeed > 1.2) {
+    if (settings.speechSpeed <= 0.98) {
+      speedInstruction = 'in a calm and clear voice';
+    } else if (settings.speechSpeed >= 1.4) {
       speedInstruction = 'quickly';
     } else {
-      speedInstruction = 'at a normal pace';
+      speedInstruction = 'in a natural voice';
     }
-    
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
-    
+
     // Generate audio for each chunk
     ttsQueue = [];
-    
+
     for (let i = 0; i < chunks.length; i++) {
       console.log(`📦 Generating chunk ${i + 1}/${chunks.length}...`);
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -2128,7 +2165,7 @@ async function generateTextToSpeech(content) {
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{ text: `Read the following text ${speedInstruction} in a clear and natural voice: ${chunks[i]}` }]
+            parts: [{ text: `Read this ${speedInstruction}: ${chunks[i]}` }]
           }],
           generationConfig: {
             responseModalities: ['AUDIO'],
@@ -2142,41 +2179,41 @@ async function generateTextToSpeech(content) {
           }
         })
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         console.error('TTS API Error:', error);
         throw new Error(error.error?.message || `TTS API failed: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       // Check if response has audio data
       if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
         console.error('Unexpected TTS response:', data);
         throw new Error('TTS returned unexpected response format');
       }
-      
+
       const audioData = data.candidates[0].content.parts[0].inlineData.data;
-      
+
       // Convert base64 to audio bytes
       const audioBytes = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
-      
+
       // Convert PCM to WAV format
       const wavBlob = convertPCMtoWAV(audioBytes, 24000, 1, 16);
       ttsQueue.push(wavBlob);
-      
+
       console.log(`✅ Chunk ${i + 1}/${chunks.length} ready`);
-      
+
       // Start playing the first chunk immediately
       if (i === 0) {
         currentChunkIndex = 0;
         playNextChunk();
       }
     }
-    
+
     console.log('🎵 All chunks generated and queued');
-    
+
   } catch (error) {
     console.error('Text-to-Speech error:', error);
     alert(`Text-to-Speech failed: ${error.message}`);
@@ -2193,7 +2230,7 @@ function startClipboardMonitoring() {
     try {
       // Try to read clipboard items (supports images)
       const clipboardItems = await navigator.clipboard.read();
-      
+
       for (const item of clipboardItems) {
         // Check for images first
         const imageTypes = item.types.filter(type => type.startsWith('image/'));
@@ -2210,7 +2247,7 @@ function startClipboardMonitoring() {
           reader.readAsDataURL(blob);
           return; // Exit after processing image
         }
-        
+
         // Check for text
         if (item.types.includes('text/plain')) {
           const blob = await item.getType('text/plain');
@@ -2242,19 +2279,19 @@ async function addToClipboardHistory(type, content) {
   return new Promise((resolve) => {
     chrome.storage.local.get(['clipboardHistory'], (result) => {
       const history = result.clipboardHistory || [];
-      
+
       // Don't add duplicates of the last item
       if (history.length > 0 && history[0].content === content) {
         resolve();
         return;
       }
-      
+
       history.unshift({
         type: type,
         content: content,
         timestamp: new Date().toISOString()
       });
-      
+
       chrome.storage.local.set({ clipboardHistory: history }, () => {
         loadClipboardHistory();
         resolve();
@@ -2267,15 +2304,15 @@ async function loadClipboardHistory() {
   chrome.storage.local.get(['clipboardHistory'], (result) => {
     const history = result.clipboardHistory || [];
     const listDiv = document.getElementById('clipboardList');
-    
+
     if (history.length === 0) {
       listDiv.innerHTML = '<p class="placeholder">No clipboard items yet. Copy something to get started!</p>';
       return;
     }
-    
+
     listDiv.innerHTML = history.map((item, index) => {
       const timeAgo = getTimeAgo(new Date(item.timestamp));
-      
+
       if (item.type === 'text') {
         const preview = item.content.length > 200 ? item.content.substring(0, 200) + '...' : item.content;
         return `
@@ -2311,7 +2348,7 @@ async function loadClipboardHistory() {
         `;
       }
     }).join('');
-    
+
     // Attach event listeners to clipboard items
     const clipboardItems = listDiv.querySelectorAll('.clipboard-item');
     clipboardItems.forEach(item => {
@@ -2324,7 +2361,7 @@ async function loadClipboardHistory() {
         copyClipboardItem(index, copyBtn);
       });
     });
-    
+
     // Attach event listeners to copy buttons
     const copyButtons = listDiv.querySelectorAll('.clipboard-copy-btn');
     copyButtons.forEach(btn => {
@@ -2334,7 +2371,7 @@ async function loadClipboardHistory() {
         copyClipboardItem(index, btn);
       });
     });
-    
+
     // Attach event listeners to delete buttons
     const deleteButtons = listDiv.querySelectorAll('.clipboard-delete-btn');
     deleteButtons.forEach(btn => {
@@ -2349,7 +2386,7 @@ async function loadClipboardHistory() {
 
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
-  
+
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -2368,7 +2405,7 @@ async function copyClipboardItem(index, buttonElement) {
     const history = result.clipboardHistory || [];
     if (history[index]) {
       const item = history[index];
-      
+
       try {
         if (item.type === 'text') {
           await navigator.clipboard.writeText(item.content);
@@ -2380,13 +2417,13 @@ async function copyClipboardItem(index, buttonElement) {
             new ClipboardItem({ [blob.type]: blob })
           ]);
         }
-        
+
         // Update button text to show "Copied"
         if (buttonElement) {
           const originalText = buttonElement.textContent;
           buttonElement.textContent = '✓ Copied';
           buttonElement.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-          
+
           // Reset after 2 seconds
           setTimeout(() => {
             buttonElement.textContent = originalText;
@@ -2412,7 +2449,7 @@ function deleteClipboardItem(index) {
 
 function clearClipboard() {
   if (!confirm('Clear all clipboard history?')) return;
-  
+
   chrome.storage.local.set({ clipboardHistory: [] }, () => {
     loadClipboardHistory();
   });
@@ -2423,7 +2460,7 @@ async function handleTextAssist(prompt) {
   if (!apiKey) {
     throw new Error('API key not configured');
   }
-  
+
   try {
     const result = await callGeminiApi(prompt);
     return result.trim();
@@ -2439,22 +2476,22 @@ async function explainImage(imageUrl) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
   }
-  
+
   // Switch to Generate tab
   switchTab('generate');
-  
+
   // Display task
   const taskDisplay = document.getElementById('currentTask');
   taskDisplay.innerHTML = `<p>🔍 Analyzing and explaining image...</p>`;
-  
+
   showLoading(true);
   document.getElementById('actionButtons').style.display = 'none';
-  
+
   try {
     // Fetch image and convert to base64
     const response = await fetch(imageUrl);
     const blob = await response.blob();
-    
+
     // Convert blob to base64
     const base64Data = await new Promise((resolve) => {
       const reader = new FileReader();
@@ -2465,10 +2502,10 @@ async function explainImage(imageUrl) {
       };
       reader.readAsDataURL(blob);
     });
-    
+
     // Determine MIME type
     const mimeType = blob.type || 'image/jpeg';
-    
+
     // Create image part for Gemini
     const imageParts = [{
       inlineData: {
@@ -2476,7 +2513,7 @@ async function explainImage(imageUrl) {
         data: base64Data
       }
     }];
-    
+
     // Call Gemini with concise TLDR-style prompt
     const prompt = `Provide a concise TLDR description of this image in 2-3 sentences. Focus on:
 - What is it? (main subject/content)
@@ -2484,13 +2521,13 @@ async function explainImage(imageUrl) {
 - Purpose or main message
 
 Keep it brief and informative, like a quick summary for someone who can't see the image.`;
-    
+
     const result = await callGeminiApi(prompt, imageParts);
-    
+
     // Show result
     showResult(result, 'success');
     document.getElementById('actionButtons').style.display = 'flex';
-    
+
     // Save to history
     saveToHistory({
       task: 'explain-image',
@@ -2498,12 +2535,12 @@ Keep it brief and informative, like a quick summary for someone who can't see th
       url: imageUrl,
       content: imageUrl
     }, result);
-    
+
   } catch (error) {
     console.error('Error explaining image:', error);
     showResult(`❌ Error: ${error.message}`, 'error');
   }
-  
+
   showLoading(false);
 }
 
@@ -2513,22 +2550,22 @@ async function extractImageText(imageUrl) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
   }
-  
+
   // Switch to Generate tab
   switchTab('generate');
-  
+
   // Display task
   const taskDisplay = document.getElementById('currentTask');
   taskDisplay.innerHTML = `<p>🖼️ Extracting text from image...</p>`;
-  
+
   showLoading(true);
   document.getElementById('actionButtons').style.display = 'none';
-  
+
   try {
     // Fetch image and convert to base64
     const response = await fetch(imageUrl);
     const blob = await response.blob();
-    
+
     // Convert blob to base64
     const base64Data = await new Promise((resolve) => {
       const reader = new FileReader();
@@ -2539,10 +2576,10 @@ async function extractImageText(imageUrl) {
       };
       reader.readAsDataURL(blob);
     });
-    
+
     // Determine MIME type
     const mimeType = blob.type || 'image/jpeg';
-    
+
     // Create image part for Gemini
     const imageParts = [{
       inlineData: {
@@ -2550,16 +2587,16 @@ async function extractImageText(imageUrl) {
         data: base64Data
       }
     }];
-    
+
     // Call Gemini with image
     const prompt = `Extract all text from this image. Return the text in a clean, structured format. If there are multiple sections, organize them clearly. If no text is found, say "No text found in image."`;
-    
+
     const result = await callGeminiApi(prompt, imageParts);
-    
+
     // Show result
     showResult(result, 'success');
     document.getElementById('actionButtons').style.display = 'flex';
-    
+
     // Save to history
     saveToHistory({
       task: 'extract-image-text',
@@ -2567,12 +2604,12 @@ async function extractImageText(imageUrl) {
       url: imageUrl,
       content: imageUrl
     }, result);
-    
+
   } catch (error) {
     console.error('Error extracting image text:', error);
     showResult(`❌ Error: ${error.message}`, 'error');
   }
-  
+
   showLoading(false);
 }
 
@@ -2604,11 +2641,11 @@ async function startMindyCall() {
 
   // Check if microphone permission was previously granted
   const { microphonePermissionGranted } = await chrome.storage.local.get(['microphonePermissionGranted']);
-  
+
   if (!microphonePermissionGranted) {
     // Open permission request popup
     updateMindyStatus('Opening permission window...');
-    
+
     chrome.windows.create({
       url: chrome.runtime.getURL('mic-permission.html'),
       type: 'popup',
@@ -2616,7 +2653,7 @@ async function startMindyCall() {
       height: 300,
       focused: true
     });
-    
+
     updateMindyStatus('Please grant microphone permission in the popup window');
     return;
   }
@@ -2631,10 +2668,10 @@ async function startMindyCall() {
     if (!activeTab) {
       throw new Error('Unable to detect the active tab for Mindy.');
     }
-    
+
     // Check if this is a PDF and update PDF mode immediately
     const isPDF = activeTab.url.toLowerCase().endsWith('.pdf') || activeTab.url.includes('.pdf?');
-    
+
     if (isPDF) {
       console.log('📄 PDF detected, activating PDF mode...');
       pdfMode.isActive = true;
@@ -2645,7 +2682,7 @@ async function startMindyCall() {
       pdfMode.isActive = false;
       updatePDFStatusBanner(); // Hide the banner
     }
-    
+
     // Request microphone access
     mindyMediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -2656,7 +2693,7 @@ async function startMindyCall() {
         autoGainControl: true
       }
     });
-    
+
     console.log('✅ Microphone access granted!');
     console.log('Stream:', mindyMediaStream);
 
@@ -2669,8 +2706,15 @@ async function startMindyCall() {
     currentPageTab.url = activeTab.url;
     sessionActivity.hasInteraction = true;
     sessionActivity.source = 'mindy';
-    
+
     const pageContext = await getPageContext(activeTab);
+
+    // Build PDF instructions if in PDF mode
+    let pdfInstructions = '';
+    if (pdfMode.isActive && pdfMode.capturedPages.length > 0) {
+      const capturedPageNumbers = pdfMode.capturedPages.map(p => p.pageNumber).join(', ');
+      pdfInstructions = `\n\nIMPORTANT: This is a PDF document. You currently have access to page(s): ${capturedPageNumbers}. If the user asks about content that doesn't appear to be in these pages, politely remind them: "I can only see page ${capturedPageNumbers.includes(',') ? 's' : ''} ${capturedPageNumbers} of this PDF. If your question is about a different page, please enter the page number in the PDF banner input and click the Capture Page button to capture that specific page first."`;
+    }
 
     // Initialize audio context
     mindyAudioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -2679,11 +2723,11 @@ async function startMindyCall() {
 
     const source = mindyAudioContext.createMediaStreamSource(mindyMediaStream);
     console.log('✅ Media stream source created');
-    
+
     // Load AudioWorklet from external file (CSP-compliant)
     const workletUrl = chrome.runtime.getURL('microphone-processor.js');
     console.log('📥 Loading AudioWorklet from:', workletUrl);
-    
+
     try {
       await mindyAudioContext.audioWorklet.addModule(workletUrl);
       console.log('✅ AudioWorklet module loaded');
@@ -2691,10 +2735,10 @@ async function startMindyCall() {
       console.error('❌ Failed to load AudioWorklet:', error);
       throw error;
     }
-    
+
     mindyAudioWorklet = new AudioWorkletNode(mindyAudioContext, 'microphone-processor');
     console.log('✅ AudioWorklet node created');
-    
+
     source.connect(mindyAudioWorklet);
     mindyAudioWorklet.connect(mindyAudioContext.destination);
     console.log('✅ Audio pipeline connected');
@@ -2703,7 +2747,7 @@ async function startMindyCall() {
     // Connect to Gemini Live API
     console.log('🔌 Connecting to Gemini Live API...');
     console.log('API Key present:', !!apiKey);
-    
+
     const ws = new WebSocket(
       `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`
     );
@@ -2713,11 +2757,11 @@ async function startMindyCall() {
     ws.onopen = async () => {
       console.log('✅ WebSocket connected!');
       updateMindyStatus('Setting up...');
-      
+
       // Load voice preference
       const voiceName = await loadMindyVoice();
       console.log('🎵 Using voice:', voiceName);
-      
+
       // Send setup message (format per official Gemini Live API docs)
       const setupMessage = {
         setup: {
@@ -2735,7 +2779,7 @@ async function startMindyCall() {
           },
           systemInstruction: {
             parts: [{
-              text: `Your name is Mindy. You are a helpful voice assistant designed to help users understand and interact with web content. When the user speaks to you, they're calling for "Mindy". Always respond as Mindy - introduce yourself when appropriate and refer to yourself by this name.\n\nThe user is viewing a webpage. Here's the content:\n\n${pageContext}\n\nAnswer questions clearly and concisely. Be friendly and helpful. You can search the internet for current information when needed.`
+              text: `Your name is Mindy. You are a helpful voice assistant designed to help users understand and interact with web content. When the user speaks to you, they're calling for "Mindy". Always respond as Mindy - introduce yourself when appropriate and refer to yourself by this name.\n\nThe user is viewing a webpage. Here's the content:\n\n${pageContext}\n\nAnswer questions clearly and concisely. Be friendly and helpful. You can search the internet for current information when needed.${pdfInstructions}`
             }]
           },
           tools: [{
@@ -2748,7 +2792,7 @@ async function startMindyCall() {
           outputAudioTranscription: {}  // Enable live captions for AI speech
         }
       };
-      
+
       console.log('📤 Sending setup message:', setupMessage);
       ws.send(JSON.stringify(setupMessage));
     };
@@ -2756,13 +2800,13 @@ async function startMindyCall() {
     ws.onmessage = async (event) => {
       try {
         let data = event.data;
-        
+
         // Handle Blob data (convert to text first)
         if (data instanceof Blob) {
           console.log('📦 Received Blob data, converting to text...');
           data = await data.text();
         }
-        
+
         console.log('📥 Received message:', data);
         const message = JSON.parse(data);
         handleMindyMessage(message);
@@ -2805,7 +2849,7 @@ async function startMindyCall() {
         if (audioChunkCount % 50 === 0) {
           console.log(`🎤 Sent ${audioChunkCount} audio chunks`);
         }
-        
+
         const audioData = event.data.audioData;
         const bytes = new Uint8Array(audioData.buffer);
         let binary = '';
@@ -2883,7 +2927,7 @@ function handleMindyMessage(message) {
         updateLiveTranscript('user', currentUserTranscript.trim());
       }
     }
-    
+
     // Handle output transcription (what AI said) - show live
     if (serverContent.outputTranscription && serverContent.outputTranscription.text) {
       const newText = serverContent.outputTranscription.text.trim();
@@ -2903,7 +2947,7 @@ function handleMindyMessage(message) {
     // Handle audio output
     if (serverContent.modelTurn && serverContent.modelTurn.parts) {
       console.log('🔊 Model turn with', serverContent.modelTurn.parts.length, 'parts');
-      
+
       // Only process audio if we're not already speaking to prevent overlapping
       let hasNewAudio = false;
       for (const part of serverContent.modelTurn.parts) {
@@ -2919,26 +2963,26 @@ function handleMindyMessage(message) {
           console.log('💬 Text response received (not displaying - waiting for audio transcript):', part.text.substring(0, 100));
         }
       }
-      
+
       if (hasNewAudio) {
         updateMindyStatus('speaking');
       }
     }
-    
+
     if (serverContent.turnComplete) {
       console.log('✅ Turn complete');
-      
+
       // Finalize transcripts (remove live indicators)
       finalizeLiveTranscripts();
-      
+
       // Reset transcript accumulators
       currentUserTranscript = '';
       currentAITranscript = '';
-      
+
       updateMindyStatus('listening');
     }
   }
-  
+
   if (message.toolCall) {
     console.log('🔧 Tool call requested:', message.toolCall);
   }
@@ -2951,7 +2995,7 @@ let mindyIsPlayingAudio = false;
 async function playMindyAudio(base64Data) {
   // Add to queue
   mindyAudioQueue.push(base64Data);
-  
+
   // Start playing if not already playing
   if (!mindyIsPlayingAudio) {
     playNextAudioChunk();
@@ -2963,10 +3007,10 @@ async function playNextAudioChunk() {
     mindyIsPlayingAudio = false;
     return;
   }
-  
+
   mindyIsPlayingAudio = true;
   const base64Data = mindyAudioQueue.shift();
-  
+
   try {
     const binaryString = atob(base64Data);
     const bytes = new Uint8Array(binaryString.length);
@@ -2990,12 +3034,12 @@ async function playNextAudioChunk() {
     const source = mindyAudioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(mindyAudioContext.destination);
-    
+
     // Play next chunk when this one ends
     source.onended = () => {
       playNextAudioChunk();
     };
-    
+
     source.start();
   } catch (error) {
     console.error('Failed to play audio:', error);
@@ -3009,7 +3053,7 @@ function toggleMindyMute() {
   const btn = document.getElementById('mindyMuteBtn');
   const icon = document.getElementById('mindyMuteIcon');
   const text = document.getElementById('mindyMuteText');
-  
+
   if (mindyIsMuted) {
     if (mindyMediaStream) {
       mindyMediaStream.getAudioTracks().forEach(track => track.enabled = false);
@@ -3057,12 +3101,12 @@ function endMindyCall() {
   // Clear transcript accumulators
   currentUserTranscript = '';
   currentAITranscript = '';
-  
+
   // Clear live transcript elements
   liveTranscriptElements = { user: null, ai: null };
 
   mindyIsMuted = false;
-  
+
   // Stop timer
   stopMindyTimer();
 
@@ -3076,7 +3120,7 @@ function endMindyCall() {
 function updateMindyStatus(status) {
   const statusText = document.getElementById('mindyStatusPanel');
   const statusIcon = document.querySelector('.mindy-status-panel');
-  
+
   if (!statusText || !statusIcon) return;
 
   statusIcon.classList.remove('listening', 'speaking');
@@ -3098,25 +3142,25 @@ function updateMindyStatus(status) {
 function startMindyTimer() {
   const timerDisplay = document.getElementById('mindyTimer');
   const timerText = document.getElementById('mindyTimerText');
-  
+
   if (!timerDisplay || !timerText) return;
-  
+
   // Show the timer
   timerDisplay.style.display = 'flex';
-  
+
   // Set start time
   mindyTimerStart = Date.now();
-  
+
   // Update timer every second
   mindyTimerInterval = setInterval(() => {
     const elapsed = Math.floor((Date.now() - mindyTimerStart) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
-    
+
     // Format as MM:SS
     timerText.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, 1000);
-  
+
   // Set initial display
   timerText.textContent = '00:00';
 }
@@ -3124,23 +3168,23 @@ function startMindyTimer() {
 function stopMindyTimer() {
   const timerDisplay = document.getElementById('mindyTimer');
   const timerText = document.getElementById('mindyTimerText');
-  
+
   // Clear the interval
   if (mindyTimerInterval) {
     clearInterval(mindyTimerInterval);
     mindyTimerInterval = null;
   }
-  
+
   // Hide the timer
   if (timerDisplay) {
     timerDisplay.style.display = 'none';
   }
-  
+
   // Reset timer text
   if (timerText) {
     timerText.textContent = '00:00';
   }
-  
+
   // Reset start time
   mindyTimerStart = null;
 }
@@ -3161,27 +3205,27 @@ let liveTranscriptElements = {
 // Clean transcript text (remove filler words and fix broken words)
 function cleanTranscriptText(text) {
   console.log('🧹 Original transcript:', text);
-  
+
   // First, remove standalone filler words with word boundaries
   const fillerWords = /\b(um|uh|uhh|ahh|ehh|er|hmm)\b\s*/gi;
   let cleaned = text.replace(fillerWords, '');
-  
+
   // Fix only single-letter breaks: "g a m e" -> "game", "t h e" -> "the"
   // Match pattern: single letter + space + single letter (not full words)
   cleaned = cleaned.replace(/\b([a-z])\s+(?=[a-z](?:\s+[a-z]|\s*\b))/gi, '$1');
-  
+
   // Do multiple passes for chains like "g a m e"
   for (let i = 0; i < 3; i++) {
     cleaned = cleaned.replace(/\b([a-z])\s+(?=[a-z](?:\s+[a-z]|\s*\b))/gi, '$1');
   }
-  
+
   const result = cleaned
     .replace(/\s+/g, ' ')               // Collapse multiple spaces
     .replace(/\s+([.,!?])/g, '$1')      // Fix spacing before punctuation
     .replace(/\s*,\s*/g, ', ')          // Normalize comma spacing  
     .trim()                             // Remove leading/trailing spaces
     .replace(/^[a-z]/, (c) => c.toUpperCase()); // Capitalize first letter
-  
+
   console.log('✨ Cleaned transcript:', result);
   return result;
 }
@@ -3189,13 +3233,13 @@ function cleanTranscriptText(text) {
 // Update live transcript (streaming as speech happens)
 function updateLiveTranscript(role, text) {
   clearMindyInfo();
-  
+
   const container = document.getElementById('mindyTranscriptPanel');
   if (!container) return;
-  
+
   // Clean the transcript text
   const cleanedText = cleanTranscriptText(text);
-  
+
   // Check if we already have a live message element for this role
   if (!liveTranscriptElements[role]) {
     // Create new live message element
@@ -3205,7 +3249,7 @@ function updateLiveTranscript(role, text) {
       <div class="mindy-message-label-panel">${role === 'user' ? 'You' : 'Mindy'} <span class="live-indicator">●</span></div>
       <p class="mindy-message-text-panel">${cleanedText}</p>
     `;
-    
+
     container.appendChild(message);
     liveTranscriptElements[role] = message;
   } else {
@@ -3215,7 +3259,7 @@ function updateLiveTranscript(role, text) {
       textElement.textContent = cleanedText;
     }
   }
-  
+
   // Auto-scroll to bottom - scroll the parent container with overflow
   const scrollContainer = container.parentElement;
   if (scrollContainer) {
@@ -3237,7 +3281,7 @@ function finalizeLiveTranscripts() {
       }
     }
   });
-  
+
   // Clear tracking
   liveTranscriptElements = {
     user: null,
@@ -3247,7 +3291,7 @@ function finalizeLiveTranscripts() {
 
 function addMindyTranscript(role, text) {
   clearMindyInfo();
-  
+
   const container = document.getElementById('mindyTranscriptPanel');
   if (!container) return;
 
@@ -3272,68 +3316,76 @@ async function getPageContext(tab) {
   try {
     // First check if this is a PDF by checking the URL
     const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
-    
+
     if (isPDF) {
-      console.log('📄 PDF detected, using OCR extraction...');
-      
+      console.log('📄 PDF detected for Mindy');
+
       // Activate PDF mode
       pdfMode.isActive = true;
       pdfMode.currentTab = tab;
+      updatePDFStatusBanner();
+
+      // Check if we already have captured pages
+      if (pdfMode.capturedPages.length > 0) {
+        // Use existing captured pages
+        const context = buildPDFContext();
+        console.log('✅ Using existing PDF context for Mindy, length:', context.length);
+        return context;
+      } else {
+        // No pages captured yet - capture page 1 now for Mindy
+        console.log('📸 Capturing PDF page 1 for Mindy call...');
+
+        // Hide floating popup before screenshot
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            function: () => {
+              const popup = document.getElementById('ai-assistant-popup');
+              if (popup) {
+                popup.style.display = 'none';
+              }
+            }
+          });
+        } catch (e) {
+          console.log('Could not hide popup:', e);
+        }
+
+        // Small delay to ensure popup is hidden
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Extract PDF content using OCR (page 1)
+        const result = await extractPDFPageWithOCR(tab.id, 1);
+
+        // Add to captured pages
+        addCapturedPage(result);
+
+        // Restore popup
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            function: () => {
+              const popup = document.getElementById('ai-assistant-popup');
+              if (popup) {
+                popup.style.display = '';
+              }
+            }
+          });
+        } catch (e) {
+          console.log('Could not restore popup:', e);
+        }
+
+        // Build context based on mode
+        const context = buildPDFContext();
+        console.log('✅ PDF page 1 captured for Mindy, context length:', context.length);
+
+        return context;
+      }
     } else {
       // Not a PDF - deactivate PDF mode
       pdfMode.isActive = false;
       updatePDFStatusBanner(); // Hide the banner
     }
-    
-    if (isPDF) {
-      
-      // Hide floating popup before screenshot
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: () => {
-            const popup = document.getElementById('ai-assistant-popup');
-            if (popup) {
-              popup.style.display = 'none';
-            }
-          }
-        });
-      } catch (e) {
-        console.log('Could not hide popup:', e);
-      }
-      
-      // Small delay to ensure popup is hidden
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Extract PDF content using OCR
-      // Use existing captured pages if available, or default to page 1 for Mindy calls (no prompt)
-      const existingPageNumber = pdfMode.capturedPages.length > 0 ? pdfMode.capturedPages[0].pageNumber : 1;
-      const result = await extractPDFPageWithOCR(tab.id, existingPageNumber);
-      
-      // Add to captured pages
-      addCapturedPage(result);
-      
-      // Restore popup
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: () => {
-            const popup = document.getElementById('ai-assistant-popup');
-            if (popup) {
-              popup.style.display = '';
-            }
-          }
-        });
-      } catch (e) {
-        console.log('Could not restore popup:', e);
-      }
-      
-      // Build context based on mode
-      const context = buildPDFContext();
-      
-      return context;
-    }
-    
+
     // Regular webpage - execute script to get content
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -3342,11 +3394,11 @@ async function getPageContext(tab) {
         const metaDesc = document.querySelector('meta[name="description"]');
         const description = metaDesc ? metaDesc.content : '';
         let content = document.body.innerText.substring(0, 10000);
-        
+
         // Check if on YouTube and try to get transcript
         const isYouTube = window.location.hostname.includes('youtube.com') && window.location.pathname === '/watch';
         let transcript = '';
-        
+
         if (isYouTube) {
           // Try to access the transcript from YouTubeSummary class if available
           if (window.youtubeTranscript) {
@@ -3375,7 +3427,7 @@ async function getPageContext(tab) {
             }
           }
         }
-        
+
         return `Page Title: ${title}\n\n${description ? `Description: ${description}\n\n` : ''}${transcript ? `Video Transcript Preview: ${transcript}\n\n` : ''}Content:\n${content}`;
       }
     });
@@ -3384,4 +3436,148 @@ async function getPageContext(tab) {
     console.error('Failed to get page context:', error);
     return 'Unable to retrieve page content.';
   }
+}
+
+// User Account Management Functions
+
+// Load user account from storage
+async function loadUserAccount() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['userAccount'], (result) => {
+      if (result.userAccount) {
+        userAccount = result.userAccount;
+      }
+      updateUserAccountUI();
+      resolve();
+    });
+  });
+}
+
+// Update user account UI
+function updateUserAccountUI() {
+  const creditAmount = document.getElementById('creditAmount');
+  const authButton = document.getElementById('authButton');
+
+  // Update credits display
+  creditAmount.textContent = userAccount.credits.toLocaleString();
+
+  // Update auth button based on login status
+  if (userAccount.isLoggedIn) {
+    authButton.textContent = userAccount.email ? userAccount.email.split('@')[0] : 'Account';
+  } else {
+    authButton.textContent = 'Login';
+  }
+}
+
+// Handle auth button click
+function handleAuthClick() {
+  if (userAccount.isLoggedIn) {
+    // Show account menu
+    showAccountMenu();
+  } else {
+    // Show login/signup dialog
+    showAuthDialog();
+  }
+}
+
+// Show account menu (when logged in)
+function showAccountMenu() {
+  const menu = confirm(`Account: ${userAccount.email}\nCredits: ${userAccount.credits}\n\nWould you like to log out?`);
+  if (menu) {
+    logoutUser();
+  }
+}
+
+// Show auth dialog (when not logged in)
+function showAuthDialog() {
+  // For now, show a simple prompt - you can replace this with a proper modal later
+  const action = confirm('Welcome to Mentelo!\n\nClick OK to Sign Up or Cancel to Login');
+  
+  if (action) {
+    // Sign up flow
+    const email = prompt('Enter your email to sign up:');
+    if (email && email.includes('@')) {
+      signupUser(email);
+    }
+  } else {
+    // Login flow
+    const email = prompt('Enter your email to login:');
+    if (email && email.includes('@')) {
+      loginUser(email);
+    }
+  }
+}
+
+// Signup user (mock implementation - replace with real API)
+function signupUser(email) {
+  // Mock signup - in production, call your backend API
+  userAccount = {
+    isLoggedIn: true,
+    credits: 100, // Welcome bonus
+    email: email
+  };
+  
+  saveUserAccount();
+  updateUserAccountUI();
+  alert(`Welcome! You've received 100 free credits to get started.`);
+}
+
+// Login user (mock implementation - replace with real API)
+function loginUser(email) {
+  // Mock login - in production, call your backend API
+  userAccount = {
+    isLoggedIn: true,
+    credits: 50, // Example existing credits
+    email: email
+  };
+  
+  saveUserAccount();
+  updateUserAccountUI();
+  alert(`Welcome back! You have ${userAccount.credits} credits.`);
+}
+
+// Logout user
+function logoutUser() {
+  userAccount = {
+    isLoggedIn: false,
+    credits: 0,
+    email: null
+  };
+  
+  saveUserAccount();
+  updateUserAccountUI();
+  alert('You have been logged out.');
+}
+
+// Save user account to storage
+function saveUserAccount() {
+  chrome.storage.local.set({ userAccount: userAccount }, () => {
+    console.log('💾 User account saved');
+  });
+}
+
+// Deduct credits (call this when user uses AI features)
+function deductCredits(amount) {
+  if (!userAccount.isLoggedIn) {
+    // Allow usage without login for now, but show a message
+    console.log('⚠️ User not logged in, no credits deducted');
+    return true;
+  }
+  
+  if (userAccount.credits >= amount) {
+    userAccount.credits -= amount;
+    saveUserAccount();
+    updateUserAccountUI();
+    return true;
+  } else {
+    alert(`Insufficient credits! You need ${amount} credits but only have ${userAccount.credits}.\n\nPlease purchase more credits to continue.`);
+    return false;
+  }
+}
+
+// Add credits (for purchases or rewards)
+function addCredits(amount) {
+  userAccount.credits += amount;
+  saveUserAccount();
+  updateUserAccountUI();
 }

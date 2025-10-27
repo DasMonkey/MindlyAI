@@ -33,6 +33,50 @@ body {
   z-index: 10;
 }
 
+/* Inline Credit Display */
+.credit-display-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+}
+
+.credit-icon {
+  font-size: 12px;
+}
+
+.credit-amount {
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Inline Auth Button */
+.auth-button-inline {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.auth-button-inline:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+}
+
+.auth-button-inline:active {
+  transform: translateY(0);
+}
+
 .header h1 {
   font-size: 16px;
   margin: 0; /* Reset margin for flex layout */
@@ -122,18 +166,20 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  padding: 6px;
+  padding: 8px 10px;
   color: #ffffff;
   font-size: 11px;
   transition: all 0.2s;
+  width: 100%;
 }
 
 .input-group select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 6px center;
-  padding-right: 24px;
+  background-position: calc(100% - 10px) center;
+  background-size: 12px 12px;
+  padding-right: 30px;
   cursor: pointer;
 }
 
