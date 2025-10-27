@@ -578,7 +578,7 @@ async function translateInChunks(textElements, targetLang, translateBtn, origina
   // Done!
   translateBtn.innerHTML = originalHTML;
   translateBtn.disabled = false;
-  showNotification(`✅ Translated ${totalTranslated} elements! (Reload to restore)`);
+  showNotification(`✅ Translated ${totalTranslated} elements! (Reload to restore)`, 10000); // Show for 10 seconds
 }
 
 async function translateSelection() {

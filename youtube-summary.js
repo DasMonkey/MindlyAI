@@ -86,7 +86,7 @@ class YouTubeSummary {
     this.summaryPanel.innerHTML = `
       <div class="yt-summary-header">
         <div class="yt-summary-title">
-          <span class="yt-summary-icon">✨</span>
+          <img src="${chrome.runtime.getURL('icons/Mentelo-logo-wh.png')}" class="yt-summary-icon" alt="Mentelo">
           <span>Mentelo</span>
         </div>
         <button class="yt-summary-collapse" title="Collapse">−</button>
@@ -164,16 +164,56 @@ class YouTubeSummary {
   }
 
   attachEventListeners() {
-    // Collapse/expand button
+    // Collapse/expand - entire header is clickable
+    const header = this.summaryPanel.querySelector('.yt-summary-header');
     const collapseBtn = this.summaryPanel.querySelector('.yt-summary-collapse');
     const content = this.summaryPanel.querySelector('.yt-summary-content');
     
-    collapseBtn.addEventListener('click', () => {
+    const toggleCollapse = (e) => {
+      // Prevent double-triggering if clicking the button directly
+      e.stopPropagation();
+      
       const isCollapsed = content.style.display === 'none';
-      content.style.display = isCollapsed ? 'block' : 'none';
-      collapseBtn.textContent = isCollapsed ? '−' : '+';
-      localStorage.setItem('yt-summary-collapsed', !isCollapsed);
-    });
+      
+      if (isCollapsed) {
+        // Expanding
+        content.style.display = 'block';
+        content.style.maxHeight = '0px';
+        content.style.opacity = '0';
+        
+        // Force reflow to ensure the initial state is applied
+        content.offsetHeight;
+        
+        // Trigger animation
+        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.opacity = '1';
+        
+        collapseBtn.textContent = '−';
+        localStorage.setItem('yt-summary-collapsed', 'false');
+      } else {
+        // Collapsing - set explicit height first
+        const currentHeight = content.scrollHeight;
+        content.style.maxHeight = currentHeight + 'px';
+        
+        // Force reflow to ensure the height is set before transition
+        content.offsetHeight;
+        
+        // Now trigger the collapse animation
+        content.style.maxHeight = '0px';
+        content.style.opacity = '0';
+        
+        // Hide after animation completes
+        setTimeout(() => {
+          content.style.display = 'none';
+        }, 300);
+        
+        collapseBtn.textContent = '+';
+        localStorage.setItem('yt-summary-collapsed', 'true');
+      }
+    };
+    
+    // Make entire header clickable
+    header.addEventListener('click', toggleCollapse);
 
     // Summary action buttons
     this.summaryPanel.querySelectorAll('.yt-summary-btn').forEach(btn => {

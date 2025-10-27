@@ -37,13 +37,9 @@
 }
 
 .yt-summary-icon {
-  font-size: 16px;
-  animation: sparkle 2s infinite;
-}
-
-@keyframes sparkle {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.1); }
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .yt-summary-collapse {
@@ -65,6 +61,8 @@
 /* Content Area */
 .yt-summary-content {
   padding: 16px;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
 }
 
 /* Button Grid */
