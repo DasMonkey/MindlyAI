@@ -3,6 +3,11 @@ let currentTask = null;
 let apiKey = null;
 let pageContent = null;
 let chatHistory = [];
+// Track whether the user has interacted via chat or Mindy
+let sessionActivity = {
+  hasInteraction: false,
+  source: null
+};
 
 // Tab tracking for Chat with Page
 let currentPageTab = {
@@ -86,6 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   chatSessionTab = { id: null, url: null };
   currentPageTab = { id: null, url: null };
   pageContent = null;
+  sessionActivity = { hasInteraction: false, source: null };
   
   await loadApiKey();
   await loadTargetLanguageUI();
@@ -445,6 +451,14 @@ async function switchTab(tabName) {
       }
     } catch (error) {
       console.log('Could not check current tab:', error);
+    }
+  }
+
+  if (tabName === 'chat') {
+    try {
+      await checkForTabChange();
+    } catch (error) {
+      console.log('Could not verify tab change on chat switch:', error);
     }
   }
 }
@@ -1489,14 +1503,16 @@ async function checkForTabChange() {
     const newTabId = tabs[0].id;
     const newUrl = tabs[0].url;
     
-    // Only check if session has been initialized (chat was actually used)
+    // Only check if a conversation session exists (chat or Mindy)
     if (!chatSessionTab.id) {
-      return; // No chat session yet, button should NOT show
+      return; // No session yet, button should NOT show
     }
     
-    // Only show button if we've actually loaded page content for chat
-    if (!pageContent) {
-      return; // No page content loaded yet, don't show button
+    const hasChatInteraction = chatHistory.length > 0;
+    const hasSessionInteraction = hasChatInteraction || sessionActivity.hasInteraction;
+    
+    if (!hasSessionInteraction) {
+      return; // User hasn't interacted yet, keep button hidden
     }
     
     // Check if this is a different tab or URL
@@ -1536,6 +1552,7 @@ async function startFreshChatSession() {
   // Clear page content and chat history
   pageContent = null;
   chatHistory = [];
+  sessionActivity = { hasInteraction: false, source: null };
   
   // Update session tab to current tab (new session starts here)
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1573,6 +1590,8 @@ async function sendChatMessage() {
   // Add user message to chat
   addMessageToChat(message, 'user');
   input.value = '';
+  sessionActivity.hasInteraction = true;
+  sessionActivity.source = 'chat';
   
   // Show typing indicator
   showTypingIndicator();
@@ -2506,6 +2525,8 @@ let mindyAudioWorklet = null;
 let mindyIsMuted = false;
 let currentUserTranscript = '';
 let currentAITranscript = '';
+let mindyTimerStart = null;
+let mindyTimerInterval = null;
 
 async function startMindyCall() {
   if (!apiKey) {
@@ -2555,7 +2576,19 @@ async function startMindyCall() {
 
     // Get page context from active tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const pageContext = await getPageContext(tabs[0]);
+    const activeTab = tabs[0];
+    if (!activeTab) {
+      throw new Error('Unable to detect the active tab for Mindy.');
+    }
+    
+    chatSessionTab.id = activeTab.id;
+    chatSessionTab.url = activeTab.url;
+    currentPageTab.id = activeTab.id;
+    currentPageTab.url = activeTab.url;
+    sessionActivity.hasInteraction = true;
+    sessionActivity.source = 'mindy';
+    
+    const pageContext = await getPageContext(activeTab);
 
     // Initialize audio context
     mindyAudioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -2735,6 +2768,7 @@ function handleMindyMessage(message) {
   if (message.setupComplete) {
     console.log('✅ Setup complete! Ready to listen.');
     updateMindyStatus('listening');
+    startMindyTimer();
     return;
   }
 
@@ -2946,6 +2980,9 @@ function endMindyCall() {
   liveTranscriptElements = { user: null, ai: null };
 
   mindyIsMuted = false;
+  
+  // Stop timer
+  stopMindyTimer();
 
   // Reset UI
   document.getElementById('mindyStartBtn').style.display = 'inline-block';
@@ -2974,6 +3011,56 @@ function updateMindyStatus(status) {
     default:
       statusText.textContent = status;
   }
+}
+
+function startMindyTimer() {
+  const timerDisplay = document.getElementById('mindyTimer');
+  const timerText = document.getElementById('mindyTimerText');
+  
+  if (!timerDisplay || !timerText) return;
+  
+  // Show the timer
+  timerDisplay.style.display = 'flex';
+  
+  // Set start time
+  mindyTimerStart = Date.now();
+  
+  // Update timer every second
+  mindyTimerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - mindyTimerStart) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    
+    // Format as MM:SS
+    timerText.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }, 1000);
+  
+  // Set initial display
+  timerText.textContent = '00:00';
+}
+
+function stopMindyTimer() {
+  const timerDisplay = document.getElementById('mindyTimer');
+  const timerText = document.getElementById('mindyTimerText');
+  
+  // Clear the interval
+  if (mindyTimerInterval) {
+    clearInterval(mindyTimerInterval);
+    mindyTimerInterval = null;
+  }
+  
+  // Hide the timer
+  if (timerDisplay) {
+    timerDisplay.style.display = 'none';
+  }
+  
+  // Reset timer text
+  if (timerText) {
+    timerText.textContent = '00:00';
+  }
+  
+  // Reset start time
+  mindyTimerStart = null;
 }
 
 function clearMindyInfo() {
@@ -3216,4 +3303,3 @@ async function getPageContext(tab) {
     return 'Unable to retrieve page content.';
   }
 }
-

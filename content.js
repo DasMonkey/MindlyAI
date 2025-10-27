@@ -135,7 +135,6 @@ function createFloatingPopup() {
   if (controlBtn) {
     controlBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      e.stopPropagation();
       toggleTTSPlayback();
     });
   }
