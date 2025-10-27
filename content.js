@@ -40,7 +40,7 @@ function createFloatingPopup() {
     <div class="ai-popup-header">
       <span class="ai-popup-title">
         <img src="${chrome.runtime.getURL('icons/Mentelo-logo-wh.png')}" alt="Mentelo" style="width: 16px; height: 16px; margin-right: 4px;">
-        Mentelo
+        <span class="ai-popup-text">Mentelo</span>
       </span>
       <button class="ai-popup-toggle" title="Minimize/Expand">−</button>
     </div>

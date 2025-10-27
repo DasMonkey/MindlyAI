@@ -1245,9 +1245,7 @@ async function loadBookmarks() {
         e.preventDefault();
         e.stopPropagation();
         const index = parseInt(btn.getAttribute('data-bookmark-index'));
-        if (confirm('Delete this bookmark?')) {
-          deleteBookmark(index);
-        }
+        deleteBookmark(index);
       });
     });
   });
@@ -2343,9 +2341,7 @@ async function loadClipboardHistory() {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const index = parseInt(btn.dataset.clipboardIndex);
-        if (confirm('Delete this clipboard item?')) {
-          deleteClipboardItem(index);
-        }
+        deleteClipboardItem(index);
       });
     });
   });

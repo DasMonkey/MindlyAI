@@ -40,17 +40,28 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
+.ai-popup-text {
+  transition: opacity 0.15s ease 0.1s, max-width 0.15s ease 0.1s;
+  opacity: 1;
+  max-width: 100px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
 .ai-popup-toggle {
   background: rgba(255, 255, 255, 0.1);
   border: none;
   color: #ffffff;
-  width: 18px; /* Reduced from 24px */
-  height: 18px;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  flex-shrink: 0 !important;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px; /* Reduced from 18px */
+  font-size: 14px;
   line-height: 1;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -71,11 +82,21 @@
   gap: 3px !important; /* Reduced from 8px */
   max-height: 360px !important; /* 40% smaller: 600 * 0.6 */
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   transition: all 0.3s ease !important;
   margin: 0 !important;
   box-sizing: border-box !important;
   align-items: stretch !important;
   justify-content: flex-start !important;
+  /* Hide scrollbar completely */
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+.ai-popup-content::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .ai-popup-content.transitioning {
@@ -90,7 +111,7 @@
 
 /* Collapsed state styling - make more transparent and narrower */
 #ai-assistant-popup:has(.ai-popup-content.collapsed) {
-  width: 110px !important;
+  width: 48px !important;
   background: linear-gradient(135deg, rgba(26, 26, 46, 0.12) 0%, rgba(22, 33, 62, 0.10) 100%);
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: none;
@@ -100,11 +121,18 @@
   background: rgba(255, 255, 255, 0.04);
   border-bottom: none;
   border-radius: 10px;
-  padding: 4px 8px;
+  padding: 4px 6px;
 }
 
 #ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-title {
   color: rgba(101, 101, 112, 0.85);
+}
+
+#ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-text {
+  opacity: 0 !important;
+  max-width: 0 !important;
+  margin: 0 !important;
+  transition: opacity 0.1s ease 0s, max-width 0.1s ease 0s !important;
 }
 
 #ai-assistant-popup:has(.ai-popup-content.collapsed) .ai-popup-toggle {
@@ -117,21 +145,6 @@
   background: rgba(255, 255, 255, 0.95);
   color: rgba(40, 40, 50, 1);
 }
-
-.ai-popup-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.ai-popup-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-}
-
-.ai-popup-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
 .ai-btn {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -283,7 +296,7 @@
   }
   
   #ai-assistant-popup:has(.ai-popup-content.collapsed) {
-    width: 100px;
+    width: 48px;
   }
   
   .ai-btn {
