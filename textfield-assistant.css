@@ -310,7 +310,9 @@
 /* Comparison View */
 .ai-toolbar-comparison {
   display: block;
+  position: relative;
   padding: 6px;
+  padding-right: 34px;
   background: white !important;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -318,9 +320,44 @@
   max-width: 500px;
 }
 
-.ai-toolbar-improved {
+/* Copy Button */
+.ai-copy-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  z-index: 10;
+}
+
+.ai-copy-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.ai-copy-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(0.95);
+}
+
+.ai-copy-btn svg {
+  width: 16px;
+  height: 16px;
+  color: #64748b;
+  stroke: #64748b;
+}
+
+.ai-copy-btn:hover svg {
+  color: #334155;
+  stroke: #334155;
 }
 
 .ai-toolbar-text {
@@ -331,7 +368,7 @@
   max-height: 150px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 6px;
+  padding: 4px;
   background: #f8fafc;
   border-radius: 6px;
   border: none;

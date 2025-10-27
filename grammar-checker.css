@@ -11,27 +11,21 @@
 .grammar-underline {
   display: block;
   border-bottom: 2px dotted #FF4444;
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
+  cursor: text;
   transition: all 0.15s ease-in-out;
-  /* Semi-transparent background ensures entire area is hoverable, not just dots */
+  /* Semi-transparent background ensures entire area is visible, not just dots */
   background: rgba(255, 68, 68, 0.08);
-}
-
-.grammar-underline:hover {
-  border-bottom-color: #FF0000;
-  border-bottom-width: 3px;
-  background: rgba(255, 68, 68, 0.15);
 }
 
 /* Suggestion Popup */
 .grammar-suggestion-popup {
   position: absolute;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.1);
-  min-width: 300px;
-  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  min-width: 260px;
+  max-width: 360px;
   z-index: 10002;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   animation: grammarPopupSlideIn 0.2s ease-out;
@@ -50,10 +44,10 @@
 }
 
 .grammar-suggestion-header {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   color: white;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -64,76 +58,76 @@
 }
 
 .grammar-suggestion-body {
-  padding: 16px;
+  padding: 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: #f8f9fa;
+  gap: 8px;
+  background: #f8fafc;
 }
 
 .grammar-suggestion-error {
   flex: 1;
-  padding: 8px 12px;
+  padding: 4px 8px;
   background: white;
-  border: 2px solid #FF4444;
-  border-radius: 6px;
-  font-size: 14px;
+  border: 1px solid #FF4444;
+  border-radius: 4px;
+  font-size: 13px;
   color: #333;
   text-decoration: line-through;
   text-decoration-color: #FF4444;
 }
 
 .grammar-suggestion-arrow {
-  font-size: 18px;
-  color: #667eea;
+  font-size: 16px;
+  color: #f59e0b;
   font-weight: bold;
 }
 
 .grammar-suggestion-correction {
   flex: 1;
-  padding: 8px 12px;
+  padding: 4px 8px;
   background: white;
-  border: 2px solid #4CAF50;
-  border-radius: 6px;
-  font-size: 14px;
+  border: 1px solid #4CAF50;
+  border-radius: 4px;
+  font-size: 13px;
   color: #333;
   font-weight: 500;
 }
 
 .grammar-suggestion-message {
-  padding: 12px 16px;
-  font-size: 13px;
-  color: #666;
-  line-height: 1.5;
-  border-top: 1px solid #e0e0e0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+  border-top: 1px solid #e2e8f0;
 }
 
 .grammar-suggestion-actions {
-  padding: 12px 16px;
+  padding: 8px 10px;
   display: flex;
   gap: 8px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #e2e8f0;
 }
 
 .grammar-suggestion-btn {
   flex: 1;
-  padding: 10px 16px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .grammar-suggestion-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   color: white;
 }
 
 .grammar-suggestion-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
 .grammar-suggestion-btn-primary:active {

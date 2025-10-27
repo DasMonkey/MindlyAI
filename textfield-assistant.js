@@ -162,11 +162,34 @@ class SelectionPopup {
     this.field = field;
     this.assistant = assistant;
     this.element = null;
-    this.selectedText = selection.toString().trim();
+    
+    // Preserve line breaks when capturing selected text
+    if (field.contentEditable === 'true') {
+      const range = selection.getRangeAt(0);
+      const contents = range.cloneContents();
+      this.selectedText = this.extractTextFromRange(contents);
+    } else {
+      this.selectedText = selection.toString().trim();
+    }
+    
     this.savedRange = selection.getRangeAt(0).cloneRange();
     this.services = new AIServices();
     this.improvedText = null; // Store the improved text result
     this.create();
+  }
+  
+  extractTextFromRange(node) {
+    let text = '';
+    for (let child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.textContent;
+      } else if (child.nodeName === 'BR') {
+        text += '\n';
+      } else {
+        text += this.extractTextFromRange(child);
+      }
+    }
+    return text;
   }
 
   create() {
@@ -337,11 +360,31 @@ class SelectionPopup {
     const contentDiv = this.element.querySelector('.ai-toolbar-result-content');
     contentDiv.innerHTML = `
       <div class="ai-toolbar-comparison">
-        <div class="ai-toolbar-improved">
-          <div class="ai-toolbar-text">${this.escapeHtml(text)}</div>
-        </div>
+        <button class="ai-copy-btn" title="Copy">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <div class="ai-toolbar-text">${this.escapeHtml(text)}</div>
       </div>
     `;
+    
+    // Add copy functionality
+    const copyBtn = contentDiv.querySelector('.ai-copy-btn');
+    copyBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(text);
+        const originalIcon = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        setTimeout(() => {
+          copyBtn.innerHTML = originalIcon;
+        }, 1000);
+      } catch (err) {
+        console.error('Failed to copy text:', err);
+      }
+    });
     
     this.improvedText = text;
   }
@@ -837,11 +880,31 @@ class Toolbar {
     const contentDiv = this.element.querySelector('.ai-toolbar-result-content');
     contentDiv.innerHTML = `
       <div class="ai-toolbar-comparison">
-        <div class="ai-toolbar-improved">
-          <div class="ai-toolbar-text">${this.escapeHtml(text)}</div>
-        </div>
+        <button class="ai-copy-btn" title="Copy">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <div class="ai-toolbar-text">${this.escapeHtml(text)}</div>
       </div>
     `;
+    
+    // Add copy functionality
+    const copyBtn = contentDiv.querySelector('.ai-copy-btn');
+    copyBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(text);
+        const originalIcon = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        setTimeout(() => {
+          copyBtn.innerHTML = originalIcon;
+        }, 1000);
+      } catch (err) {
+        console.error('Failed to copy text:', err);
+      }
+    });
     
     this.improvedText = text;
   }
@@ -916,7 +979,17 @@ class Toolbar {
     // Capture any selected text immediately when toolbar is created
     const selection = this.field.ownerDocument.defaultView.getSelection();
     if (selection && selection.toString().trim()) {
-      this.selectedText = selection.toString().trim();
+      // For contentEditable, preserve line breaks
+      if (this.field.contentEditable === 'true') {
+        // Get text from the range while preserving structure
+        const range = selection.getRangeAt(0);
+        const contents = range.cloneContents();
+        
+        // Convert to plain text but preserve line breaks
+        this.selectedText = this.extractTextFromNode(contents);
+      } else {
+        this.selectedText = selection.toString().trim();
+      }
       
       // Store the range to restore selection later
       if (selection.rangeCount > 0) {
@@ -926,6 +999,20 @@ class Toolbar {
       console.log('🎯 Captured selection:', this.selectedText.substring(0, 50) + '...');
     }
   }
+  
+  extractTextFromNode(node) {
+    let text = '';
+    for (let child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.textContent;
+      } else if (child.nodeName === 'BR') {
+        text += '\n';
+      } else {
+        text += this.extractTextFromNode(child);
+      }
+    }
+    return text;
+  }
 
   getFieldText() {
     // First, check if we captured selected text when toolbar was opened
@@ -934,19 +1021,51 @@ class Toolbar {
     }
     
     // Fall back to full field content
-    // Always use value for input/textarea, textContent for contenteditable
-    if (this.field.contentEditable === 'true') {
-      return this.field.textContent;
+    // Always use value for input/textarea
+    if (this.field.contentEditable !== 'true') {
+      return this.field.value;
     }
-    return this.field.value;
+    
+    // For contentEditable, preserve line breaks by walking the DOM
+    return this.getTextWithLineBreaks(this.field);
+  }
+  
+  getTextWithLineBreaks(element) {
+    let text = '';
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+      null,
+      false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.textContent;
+      } else if (node.nodeName === 'BR') {
+        text += '\n';
+      } else if (node.nodeName === 'P' || node.nodeName === 'DIV') {
+        // Add newline before block elements (except the first one)
+        if (text && !text.endsWith('\n')) {
+          text += '\n';
+        }
+      }
+    }
+    
+    return text;
   }
 
   setFieldText(text) {
     if (this.field.contentEditable === 'true') {
-      // For contenteditable, preserve structure by replacing only text nodes
-      // or use innerHTML with proper line break conversion
-      const lines = text.split('\n');
-      const html = lines.map(line => line || '<br>').join('<br>');
+      // For contenteditable, preserve line breaks properly
+      const escaped = this.escapeHtml(text);
+      const html = escaped.replace(/\n/g, '<br>');
+      
+      // Set white-space to preserve line breaks
+      this.field.style.whiteSpace = 'pre-wrap';
+      
+      // Set the HTML content
       this.field.innerHTML = html;
       
       // Move cursor to end

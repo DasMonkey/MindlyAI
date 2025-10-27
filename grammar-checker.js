@@ -6,6 +6,7 @@ class GrammarChecker {
     this.activeSuggestionPopup = null;
     this.debounceTimers = new WeakMap();
     this.isHoveringPopup = false;
+    this.ignoredErrors = new Set(); // Track ignored errors (error text)
   }
 
   init() {
@@ -164,6 +165,9 @@ JSON response:`;
           errors = [];
         }
 
+        // Filter out ignored errors
+        errors = errors.filter(err => !this.ignoredErrors.has(err.error));
+        
         // Cache the result
         this.checkCache.set(cacheKey, errors);
         
@@ -201,6 +205,7 @@ class FieldChecker {
     this.errors = [];
     this.lastCheckedText = '';
     this.debounceTimer = null;
+    this.hoverTracked = false;
     this.attachListeners();
   }
 
@@ -271,6 +276,9 @@ class FieldChecker {
     });
 
     document.body.appendChild(this.overlay);
+
+    // Setup hover tracking for showing suggestions
+    this.setupFieldHoverTracking();
 
     // Update overlay position on scroll (page scroll or field internal scroll)
     const updatePosition = () => {
@@ -514,8 +522,8 @@ class FieldChecker {
       width: ${width}px;
       height: ${height}px;
       border-bottom: 2px dotted #FF4444;
-      pointer-events: auto;
-      cursor: pointer;
+      pointer-events: none;
+      cursor: text;
       display: block;
       background: rgba(255, 68, 68, 0.05);
     `;
@@ -524,64 +532,113 @@ class FieldChecker {
     underline.dataset.segment = segmentIndex;
     underline.title = `${error.type}: ${error.message}`;
 
-    // Show suggestion on hover with reduced delay and better handling
-    let showTimeout;
-    let isHovering = false;
+    this.overlay.appendChild(underline);
+  }
+  
+  setupFieldHoverTracking() {
+    if (!this.overlay || this.hoverTracked) return;
+    this.hoverTracked = true;
     
-    underline.addEventListener('mouseenter', (e) => {
-      isHovering = true;
-      clearTimeout(showTimeout);
+    const showSuggestionForError = (error, x, y) => {
+      // Convert overlay-relative position to absolute
+      const overlayRect = this.overlay.getBoundingClientRect();
+      const underline = document.createElement('div');
+      underline.style.cssText = `
+        position: absolute;
+        left: ${x - overlayRect.left}px;
+        top: ${y - overlayRect.top}px;
+        width: 1px;
+        height: 20px;
+        pointer-events: none;
+      `;
       
-      // Show popup immediately if already hovering over same error
-      const currentPopup = this.grammarChecker.activeSuggestionPopup;
-      if (currentPopup && currentPopup.error.error === error.error) {
-        // Already showing this error, keep it visible
+      this.grammarChecker.showSuggestionPopup(error, {
+        left: x,
+        top: y,
+        bottom: y + 20,
+        right: x + 1
+      }, this.field);
+    };
+    
+    let hoverTimeout;
+    let lastHoveredError = null;
+    
+    // Track mouse position over the field
+    const mousemoveHandler = (e) => {
+      // Clear any pending timeout
+      clearTimeout(hoverTimeout);
+      
+      // Check if overlay still exists (might have been removed after ignoring)
+      if (!this.overlay || !this.overlay.parentNode) {
         return;
       }
       
-      // Otherwise show after short delay
-      showTimeout = setTimeout(() => {
-        if (isHovering) {
-          const rect = underline.getBoundingClientRect();
-          this.grammarChecker.showSuggestionPopup(error, rect, this.field);
-        }
-      }, 150);
-    });
-
-    underline.addEventListener('mouseleave', (e) => {
-      isHovering = false;
-      clearTimeout(showTimeout);
+      // Get mouse position relative to the field
+      const fieldRect = this.field.getBoundingClientRect();
+      const x = e.clientX;
+      const y = e.clientY;
       
-      // Don't hide immediately - give time to move to popup
-      setTimeout(() => {
-        if (!isHovering && !this.grammarChecker.isHoveringPopup) {
-          // Check if mouse is over another underline with same error
-          const allUnderlines = this.overlay.querySelectorAll('.grammar-underline');
-          let stillHoveringError = false;
-          allUnderlines.forEach(u => {
-            if (u.matches(':hover')) {
-              const uError = JSON.parse(u.dataset.error);
-              if (uError.error === error.error) {
-                stillHoveringError = true;
-              }
-            }
-          });
-          
-          if (!stillHoveringError) {
-            this.grammarChecker.hideSuggestionPopup();
-          }
+      // Check if mouse is within field bounds
+      if (x < fieldRect.left || x > fieldRect.right || 
+          y < fieldRect.top || y > fieldRect.bottom) {
+        return;
+      }
+      
+      // Find which error (if any) the mouse is over
+      const underlines = this.overlay.querySelectorAll('.grammar-underline');
+      const overlayRect = this.overlay.getBoundingClientRect();
+      const mouseX = x - overlayRect.left;
+      const mouseY = y - overlayRect.top;
+      
+      let foundError = null;
+      underlines.forEach(underline => {
+        const errorData = JSON.parse(underline.dataset.error);
+        const underlineRect = underline.getBoundingClientRect();
+        const relX = underlineRect.left - overlayRect.left;
+        const relY = underlineRect.top - overlayRect.top;
+        
+        if (mouseX >= relX && mouseX <= relX + underlineRect.width &&
+            mouseY >= relY && mouseY <= relY + underlineRect.height) {
+          foundError = errorData;
         }
-      }, 100);
-    });
+      });
+      
+      if (foundError && foundError !== lastHoveredError) {
+        lastHoveredError = foundError;
+        
+        // Show popup after short delay
+        hoverTimeout = setTimeout(() => {
+          showSuggestionForError(foundError, x, y);
+        }, 200);
+      } else if (!foundError) {
+        lastHoveredError = null;
+        
+        // Hide popup after delay
+        hoverTimeout = setTimeout(() => {
+          this.grammarChecker.hideSuggestionPopup();
+        }, 300);
+      }
+    };
     
-    // Also show on click (immediate, no delay)
-    underline.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const rect = underline.getBoundingClientRect();
-      this.grammarChecker.showSuggestionPopup(error, rect, this.field);
-    });
-
-    this.overlay.appendChild(underline);
+    const mouseleaveHandler = () => {
+      clearTimeout(hoverTimeout);
+      lastHoveredError = null;
+      setTimeout(() => {
+        if (!this.grammarChecker.isHoveringPopup) {
+          this.grammarChecker.hideSuggestionPopup();
+        }
+      }, 300);
+    };
+    
+    // Add event listeners
+    this.field.addEventListener('mousemove', mousemoveHandler);
+    this.field.addEventListener('mouseleave', mouseleaveHandler);
+    
+    // Store handlers for cleanup
+    this._hoverHandlers = {
+      mousemove: mousemoveHandler,
+      mouseleave: mouseleaveHandler
+    };
   }
   
   getTextNodes(element) {
@@ -703,6 +760,14 @@ class FieldChecker {
       }
       this.overlay.remove();
       this.overlay = null;
+      this.hoverTracked = false;
+    }
+    
+    // Remove hover tracking event listeners
+    if (this._hoverHandlers) {
+      this.field.removeEventListener('mousemove', this._hoverHandlers.mousemove);
+      this.field.removeEventListener('mouseleave', this._hoverHandlers.mouseleave);
+      this._hoverHandlers = null;
     }
   }
 }
@@ -765,7 +830,7 @@ class SuggestionPopup {
     });
 
     this.element.querySelector('[data-action="ignore"]').addEventListener('click', () => {
-      this.grammarChecker.hideSuggestionPopup();
+      this.ignoreError();
     });
 
     // Ensure popup stays on screen
@@ -781,15 +846,26 @@ class SuggestionPopup {
   }
 
   applyCorrection() {
-    const text = this.field.contentEditable === 'true' 
-      ? this.field.innerText 
-      : this.field.value;
-
-    const newText = text.replace(this.error.error, this.error.correction);
-
     if (this.field.contentEditable === 'true') {
-      this.field.innerText = newText;
+      // For contentEditable, walk through text nodes and replace
+      const walker = document.createTreeWalker(
+        this.field,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      
+      let textNode;
+      while (textNode = walker.nextNode()) {
+        if (textNode.textContent.includes(this.error.error)) {
+          textNode.textContent = textNode.textContent.replace(this.error.error, this.error.correction);
+          break; // Only replace first occurrence
+        }
+      }
     } else {
+      // For textarea/input
+      const text = this.field.value;
+      const newText = text.replace(this.error.error, this.error.correction);
       this.field.value = newText;
     }
 
@@ -840,6 +916,47 @@ class SuggestionPopup {
         checker.scheduleCheck();
       }
     }, 500);
+  }
+
+  ignoreError() {
+    // Add error to ignored list
+    this.grammarChecker.ignoredErrors.add(this.error.error);
+    
+    // Clear the check cache so ignored errors don't reappear
+    this.grammarChecker.checkCache.clear();
+    
+    // Get the field checker
+    const checker = this.grammarChecker.attachedFields.get(this.field);
+    
+    // Remove the underline(s) for this specific error
+    if (checker && checker.overlay) {
+      const underlines = checker.overlay.querySelectorAll('.grammar-underline');
+      const errorText = this.error.error;
+      
+      underlines.forEach(underline => {
+        const errorData = JSON.parse(underline.dataset.error);
+        
+        // Remove if it's the same error
+        if (errorData.error === errorText) {
+          underline.remove();
+        }
+      });
+      
+      // If no more underlines, remove the overlay entirely
+      if (checker.overlay.querySelectorAll('.grammar-underline').length === 0) {
+        checker.removeOverlay();
+      }
+    }
+    
+    // Show feedback
+    const btn = this.element.querySelector('[data-action="ignore"]');
+    btn.textContent = '✓ Ignored';
+    btn.disabled = true;
+    
+    // Hide popup after a brief delay
+    setTimeout(() => {
+      this.grammarChecker.hideSuggestionPopup();
+    }, 300);
   }
 
   escapeHtml(text) {

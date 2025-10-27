@@ -1,22 +1,22 @@
-# AI Content Assistant - Chrome Extension
+# Mentelo - AI Content Assistant Chrome Extension
 
-A powerful Chrome extension powered by Google Gemini AI that helps you summarize pages, translate content, create mindmaps, generate social media content, and manage bookmarks with AI organization.
+A powerful Chrome extension powered by Google Gemini AI that provides intelligent assistance for writing, reading, and browsing the web.
 
 ## ✨ Features
 
 ### 🎯 Core Features
-- **✨ Text Field Assistant**: Grammarly-like AI writing assistant on any text field (NEW!)
+- **✨ Text Field Assistant**: Grammarly-like AI writing assistant on any text field
+- **📝 Grammar Checker**: Real-time grammar and spelling corrections with visual feedback
 - **📄 Page Summarization**: Get AI-powered summaries of any webpage
-- **🌐 Page Translation**: Translate entire pages or selected text
-- **🧠 Mindmap Generation**: Create visual mindmap structures from content
-- **📱 Social Media Content**: Generate viral-format posts for X, LinkedIn, Instagram
+- **🌐 Translation**: Translate entire pages or selected text with HTML preservation
+- **🎤 Call Mindy**: Voice AI assistant with real-time conversation
+- **💬 Chat with Page**: Context-aware chat about any webpage
+- **🔊 Text to Speech**: Listen to selected text with voice control
+- **📱 Social Media Content**: Generate viral posts for X, LinkedIn, Instagram
 - **🔖 Smart Bookmarks**: Save text selections with AI-powered organization
-
-### 🎨 User Interface
-- **Floating Popup**: Beautiful, draggable on-page popup with dark theme
-- **Side Panel Dashboard**: Comprehensive dashboard for all features
-- **Context Menu**: Right-click menu for quick actions
-- **Responsive Design**: Works seamlessly on all screen sizes
+- **📹 YouTube Summaries**: 7 types of video summaries with timestamps
+- **📄 PDF OCR**: Extract and analyze text from PDF documents
+- **🖼️ Image Analysis**: Extract text from images and get detailed explanations
 
 ## 🚀 Installation
 
@@ -42,7 +42,7 @@ A powerful Chrome extension powered by Google Gemini AI that helps you summarize
 
 ## 📖 How to Use
 
-### ✨ Text Field Assistant (NEW!)
+### ✨ Text Field Assistant
 Your AI-powered writing companion that appears on any text field:
 
 **How it works:**
@@ -64,14 +64,127 @@ Your AI-powered writing companion that appears on any text field:
 - ✅ Beautiful animations
 - ✅ Keyboard shortcuts (Esc to close)
 
-See [TEXT-FIELD-ASSISTANT.md](TEXT-FIELD-ASSISTANT.md) for full documentation.
+### 📝 Grammar Checker
+Real-time grammar and spelling corrections as you type:
+
+**How it works:**
+1. Type in any text field
+2. Red dotted underlines appear on errors (1 second after typing)
+3. Hover over underline to see suggestions
+4. Click "Apply" to fix instantly
+
+**Features:**
+- ✅ Automatic error detection
+- ✅ Visual feedback with underlines
+- ✅ Hover suggestions with explanations
+- ✅ One-click corrections
+- ✅ Smart caching to minimize API calls
+
+### 🎤 Call Mindy - Voice AI Assistant
+Have natural voice conversations with AI about any webpage:
+
+**How it works:**
+1. Click "Call Mindy" button in floating popup
+2. Allow microphone access
+3. Start speaking - AI responds with voice
+4. See real-time transcription of both sides
+
+**Features:**
+- ✅ Real-time voice conversation
+- ✅ Context-aware (understands page content)
+- ✅ High-quality voice synthesis (24kHz)
+- ✅ Interrupt support
+- ✅ Beautiful purple gradient UI
+
+### 💬 Chat with Page
+Ask questions about the current page:
+
+**How it works:**
+1. Click "Chat with Page" button
+2. Dashboard opens with context from current page
+3. Type your question
+4. AI responds based on page content
+
+**Features:**
+- ✅ Context-aware responses
+- ✅ Works with PDFs (OCR-based)
+- ✅ Chat history maintained
+- ✅ Clean conversation UI
+
+### 🔊 Text to Speech
+Listen to any selected text:
+
+**How it works:**
+1. Select text on the page
+2. Click "Text to Speech" button
+3. Audio plays automatically
+4. Use pause/resume controls
+
+**Features:**
+- ✅ Multiple voice options
+- ✅ Speed control (0.5x - 2.0x)
+- ✅ Pause/Resume controls
+- ✅ Queue management for long text
+
+### 📹 YouTube Summaries
+Get instant summaries of YouTube videos:
+
+**How it works:**
+1. Navigate to any YouTube video
+2. Panel appears in right sidebar
+3. Choose from 7 summary types:
+   - ⚡ TLDR
+   - 📝 Detailed Summary
+   - 📚 Key Concepts
+   - ⏱️ Timestamped Chapters
+   - 💡 Main Takeaways
+   - 📋 Study Notes
+   - 📱 Social Media Posts
+4. Click to generate
+
+**Features:**
+- ✅ 7 different summary types
+- ✅ Clickable timestamps for navigation
+- ✅ Copy to clipboard
+- ✅ Collapsible panel
+
+### 📄 PDF OCR
+Extract and analyze text from PDF documents:
+
+**How it works:**
+1. Open a PDF in Chrome
+2. Click "Call Mindy" or "Chat with Page"
+3. Current visible page is captured and analyzed
+4. AI extracts text using OCR
+
+**Features:**
+- ✅ Automatic PDF detection
+- ✅ OCR-based text extraction
+- ✅ Works with scanned PDFs
+- ✅ Context limits protected (10K chars)
+
+### 🖼️ Image Analysis
+Extract text and get explanations from images:
+
+**How it works:**
+1. Right-click any image
+2. Select "MindlyAI: Extract texts" or "Explain This Image"
+3. Results appear in dashboard
+
+**Features:**
+- ✅ OCR text extraction
+- ✅ Detailed image explanations
+- ✅ Alt-text generation
+- ✅ Chart/diagram analysis
 
 ### Floating Popup
 A floating popup appears on every page with quick access buttons:
 - **Summarize Page**: Get a concise summary of the current page
 - **Translate Page**: Translate the entire page content
 - **Translate Text**: Translate selected text (select text first)
-- **Create Mindmap**: Generate a hierarchical mindmap structure
+- **Text to Speech**: Listen to selected text
+- **Chat with Page**: Ask questions about the current page
+- **Call Mindy**: Start a voice conversation
 - **Social Content**: Create viral social media posts
 - **Save Bookmark**: Save selected text or page to bookmarks
 - **Open Dashboard**: Open the full side panel dashboard
@@ -80,9 +193,29 @@ The popup is:
 - ✅ Draggable - move it anywhere on the page
 - ✅ Collapsible - minimize it when not needed
 - ✅ Beautiful dark theme with rounded corners
+- ✅ Adapts to side panel position
 
 ### Side Panel Dashboard
 Click "Open Dashboard" or the extension icon to access:
+
+#### ⚙️ Settings Tab
+- Configure Gemini API key
+- Set translation target language
+- Choose Mindy voice
+- Customize TTS settings
+- View API status
+
+#### 💬 Chat Tab
+- Chat with page context
+- View conversation history
+- Refresh or start new session
+- Context-aware responses
+
+#### 🎤 Mindy Tab
+- Voice AI assistant controls
+- Real-time conversation
+- Microphone mute/unmute
+- End call and new session
 
 #### 📝 Generate Tab
 - View current task status
@@ -100,47 +233,76 @@ Click "Open Dashboard" or the extension icon to access:
 - Revisit previous results
 - Clear history
 
+#### 📋 Clipboard Tab
+- View clipboard history
+- Paste recent items
+- Clear clipboard
+
 ### Context Menu
 Right-click on selected text to:
 - Translate Selected Text
-- Save to AI Bookmarks
+- Copy to Clipboard
+
+Right-click on images to:
+- Extract texts from image (OCR)
+- Explain This Image (detailed analysis)
 
 ## 🛠️ Technical Details
 
 ### Built With
 - **Manifest V3**: Latest Chrome extension standard
-- **Google Gemini API**: Gemini 1.5 Flash model
+- **Google Gemini API**: 
+  - Gemini 2.5 Flash (general tasks and TTS)
+  - Gemini 2.5 Flash Native Audio (voice conversations - Mindy)
+  - Gemini 2.0 Flash (legacy general tasks)
+  - Gemini Flash Lite (grammar checking)
 - **Vanilla JavaScript**: No frameworks, fast and lightweight
 - **Modern CSS**: Gradient backgrounds, smooth animations
+- **Web Audio API**: For voice capture and playback
+- **WebSocket**: Real-time communication for Mindy
 
 ### File Structure
 ```
-Chrome-ext-GoogleAI/
+MindlyAI/
 ├── manifest.json               # Extension configuration
 ├── background.js               # Service worker for background tasks
-├── content.js                 # Content script (floating popup)
-├── content.css                # Styles for floating popup
-├── textfield-assistant.js     # Text field AI assistant (NEW!)
-├── textfield-assistant.css    # Text field assistant styles (NEW!)
-├── sidepanel.html             # Dashboard HTML
-├── sidepanel.css              # Dashboard styles
-├── sidepanel.js               # Dashboard functionality
-├── icons/                     # Extension icons
+├── content.js                  # Content script (floating popup)
+├── content.css                 # Styles for floating popup
+├── textfield-assistant.js      # Text field AI assistant
+├── textfield-assistant.css     # Text field assistant styles
+├── grammar-checker.js          # Grammar checker logic
+├── grammar-checker.css         # Grammar checker styles
+├── youtube-summary.js          # YouTube summary feature
+├── youtube-summary.css         # YouTube summary styles
+├── pdf-content.js              # PDF support
+├── gemini-live-connection.js   # Mindy voice assistant
+├── gemini-live-modal.html      # Mindy UI
+├── gemini-live-modal.css       # Mindy styles
+├── audio-processor.js          # Audio processing
+├── sidepanel.html              # Dashboard HTML
+├── sidepanel.css               # Dashboard styles
+├── sidepanel.js                # Dashboard functionality
+├── icons/                      # Extension icons
 │   ├── icon16.png
 │   ├── icon32.png
 │   ├── icon48.png
 │   └── icon128.png
-├── TEXT-FIELD-ASSISTANT.md    # Text assistant documentation (NEW!)
-├── TESTING-GUIDE.md           # Testing guide (NEW!)
-└── README.md                  # This file
+├── Markdown files/             # Documentation
+│   ├── TEXT-FIELD-ASSISTANT.md
+│   ├── GRAMMAR-CHECKER-FEATURE.md
+│   ├── CALL_MINDY_README.md
+│   ├── YOUTUBE-SUMMARY-FEATURE.md
+│   └── more...
+└── README.md                   # This file
 ```
 
 ### Permissions Used
 - **activeTab**: Access current tab content
-- **storage**: Save API key, bookmarks, history
+- **storage**: Save API key, bookmarks, history, settings
 - **scripting**: Inject content scripts
 - **contextMenus**: Right-click menu options
 - **sidePanel**: Display side panel dashboard
+- **clipboardRead/Write**: Clipboard operations
 - **host_permissions**: Access all URLs for content extraction
 
 ## 🎯 Features in Detail
@@ -153,18 +315,51 @@ Uses AI to extract key points, main ideas, and important takeaways from any webp
 - Documentation
 
 ### Translation
-Supports multiple languages:
+Supports multiple languages with HTML preservation:
 - Auto-detect source language
-- Translate to English, Spanish, French, Chinese
-- Maintains formatting and structure
+- Translate to English, Spanish, French, German, Chinese, Japanese, Korean, Portuguese, Russian, Arabic, Hindi, Italian
+- Maintains formatting, structure, and HTML tags
 - Works on entire pages or selected text
+- In-place translation with visual feedback
 
-### Mindmap Generation
-Creates hierarchical structures with:
-- Main topics
-- Subtopics
-- Details and connections
-- Clear visual organization
+### YouTube Summaries
+7 different summary types:
+- **TLDR**: Quick 3-5 bullet points
+- **Detailed Summary**: Comprehensive overview
+- **Key Concepts**: Educational focus
+- **Timestamped Chapters**: 5-8 navigable sections
+- **Main Takeaways**: Actionable insights
+- **Study Notes**: Structured learning guide
+- **Social Media Posts**: Twitter, LinkedIn, Instagram formats
+
+### Voice Features
+
+**Call Mindy:**
+- Real-time voice conversation
+- Context-aware responses
+- High-quality synthesis (24kHz)
+- Interrupt support
+- Visual transcription
+
+**Text to Speech:**
+- Multiple voice options (Aoede, Kore, Austris, etc.)
+- Speed control (0.5x - 2.0x)
+- Queue management
+- Pause/Resume controls
+
+### PDF & Image Support
+
+**PDF OCR:**
+- Automatic text extraction
+- Works with scanned PDFs
+- Page-by-page analysis
+- Context limit protection
+
+**Image Analysis:**
+- OCR text extraction
+- Detailed explanations
+- Alt-text generation
+- Chart/diagram analysis
 
 ### Social Media Content
 Generates viral-format posts with:
@@ -213,13 +408,13 @@ Automatically groups bookmarks by:
 ## 🌟 Future Enhancements
 
 Planned features:
-- [ ] Web app for syncing bookmarks across devices
-- [ ] Custom AI models selection
-- [ ] Export bookmarks to various formats
-- [ ] Browser sync for settings
-- [ ] More social media platforms
-- [ ] Image generation integration
-- [ ] Voice input support
+- [ ] Multi-page PDF support with page navigation
+- [ ] Voice selection for Mindy
+- [ ] Batch image processing
+- [ ] Export chat history
+- [ ] Custom AI prompts
+- [ ] Keyboard shortcuts
+- [ ] Dark/light theme toggle
 - [ ] Multi-language UI
 
 ## 📝 Notes
