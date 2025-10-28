@@ -165,11 +165,18 @@ class AIProviderManager {
       const result = await provider[method](...args);
       return this.normalizeResponse(result, this.activeProvider, false);
     } catch (error) {
-      console.error(`❌ Error with ${this.activeProvider} provider:`, error);
+      // Only log error if it's not an expected API key issue
+      const isAPIKeyError = error.message && error.message.includes('API key not configured');
+      if (!isAPIKeyError) {
+        console.error(`❌ Error with ${this.activeProvider} provider:`, error);
+      }
 
       // Attempt fallback if enabled
       if (this.settings.autoFallback) {
-        console.log('🔄 Attempting automatic fallback...');
+        // Don't attempt fallback for API key errors - it's expected
+        if (!isAPIKeyError) {
+          console.log('🔄 Attempting automatic fallback...');
+        }
         
         try {
           const fallbackResult = await this.fallbackToAlternativeProvider(this.activeProvider);
@@ -180,7 +187,10 @@ class AIProviderManager {
             return this.normalizeResponse(result, this.activeProvider, true);
           }
         } catch (fallbackError) {
-          console.error('❌ Fallback failed:', fallbackError);
+          // Only log fallback error if it's not an API key issue
+          if (!fallbackError.message || !fallbackError.message.includes('API key not configured')) {
+            console.error('❌ Fallback failed:', fallbackError);
+          }
           // If fallback fails, throw the original error instead of fallback error
           throw error;
         }

@@ -159,7 +159,8 @@ class CloudAIProvider {
    */
   async callGeminiApi(prompt, imageParts = null) {
     if (!this.apiKey) {
-      throw new Error('API key not configured');
+      // Don't log error - this is expected when using built-in AI only
+      throw new Error('Cloud AI: API key not configured (this is normal if using built-in AI)');
     }
 
     // Use latest lite model
@@ -245,7 +246,8 @@ class CloudAIProvider {
    */
   async callGeminiVisionApi(prompt, imageBase64) {
     if (!this.apiKey) {
-      throw new Error('API key not configured');
+      // Don't log error - this is expected when using built-in AI only
+      throw new Error('Cloud AI: API key not configured (this is normal if using built-in AI)');
     }
 
     console.log('📤 Calling Gemini Vision API');
@@ -365,7 +367,10 @@ ${textOrPrompt}`;
       
       return corrections;
     } catch (error) {
-      console.error('❌ Grammar check error:', error);
+      // Only log if it's not an API key issue (which is expected when using built-in AI)
+      if (!error.message.includes('API key not configured')) {
+        console.error('❌ Grammar check error:', error);
+      }
       throw error;
     }
   }

@@ -91,7 +91,7 @@ class GrammarChecker {
   }
 
   async checkText(text) {
-    console.log('🔍 Grammar check requested for text:', text.substring(0, 50) + '...');
+    console.log('🔍 Grammar check requested for text:', text.substring(0, 50) + '...', `(${text.length} chars, ${text.split('\n').length} lines)`);
     
     // Check cache first
     const cacheKey = text.trim().toLowerCase();
@@ -241,7 +241,7 @@ class FieldChecker {
   async checkGrammar() {
     const text = this.getFieldText();
 
-    console.log('📝 FieldChecker: Checking grammar for text:', text.substring(0, 50) + '...');
+    console.log('📝 FieldChecker: Checking grammar for text:', text.substring(0, 50) + '...', `(${text.length} chars, ${text.split('\n').length} lines)`);
 
     if (!text || text.length < 3 || text === this.lastCheckedText) {
       console.log('⏭️ Skipping check (too short or same as last check)');
@@ -1138,6 +1138,10 @@ class FieldChecker {
     const fieldStyles = window.getComputedStyle(this.field);
     const fieldRect = this.field.getBoundingClientRect();
 
+    // Get scroll offsets - these need to be subtracted from the final position
+    const scrollTop = this.field.scrollTop || 0;
+    const scrollLeft = this.field.scrollLeft || 0;
+
     // Use fixed positioning to match the field's current viewport position
     mirror.style.cssText = `
       position: fixed;
@@ -1195,7 +1199,19 @@ class FieldChecker {
       return null;
     }
 
-    return rect;
+    // Adjust rect for textarea's internal scroll offset
+    // When textarea scrolls down, content moves up, so we subtract scrollTop
+    // When textarea scrolls right, content moves left, so we subtract scrollLeft
+    return {
+      top: rect.top - scrollTop,
+      bottom: rect.bottom - scrollTop,
+      left: rect.left - scrollLeft,
+      right: rect.right - scrollLeft,
+      width: rect.width,
+      height: rect.height,
+      x: rect.x - scrollLeft,
+      y: rect.y - scrollTop
+    };
   }
 
   escapeHtml(text) {
