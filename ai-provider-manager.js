@@ -170,12 +170,19 @@ class AIProviderManager {
       // Attempt fallback if enabled
       if (this.settings.autoFallback) {
         console.log('🔄 Attempting automatic fallback...');
-        const fallbackResult = await this.fallbackToAlternativeProvider(this.activeProvider);
         
-        if (fallbackResult.success) {
-          const fallbackProvider = this.providers.get(this.activeProvider);
-          const result = await fallbackProvider[method](...args);
-          return this.normalizeResponse(result, this.activeProvider, true);
+        try {
+          const fallbackResult = await this.fallbackToAlternativeProvider(this.activeProvider);
+          
+          if (fallbackResult.success) {
+            const fallbackProvider = this.providers.get(this.activeProvider);
+            const result = await fallbackProvider[method](...args);
+            return this.normalizeResponse(result, this.activeProvider, true);
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback failed:', fallbackError);
+          // If fallback fails, throw the original error instead of fallback error
+          throw error;
         }
       }
 

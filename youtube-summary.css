@@ -215,10 +215,11 @@
   color: #ccc;
   font-size: 13px;
   line-height: 1.6;
-  max-height: 400px;
+  max-height: 500px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #3e3e3e #1a1a1a;
+  padding-bottom: 10px;
 }
 
 .yt-result-content::-webkit-scrollbar {

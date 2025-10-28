@@ -28,13 +28,13 @@ class BuiltInAIProvider {
   async isAvailable() {
     // Check if at least one API is available
     await this.checkAllAPIs();
-    
+
     for (const [apiName, status] of this.apiStatus) {
       if (status.availability === 'available' || status.availability === 'downloadable') {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -51,7 +51,7 @@ class BuiltInAIProvider {
   async checkAllAPIs() {
     const apis = [
       'Proofreader',
-      'Translator', 
+      'Translator',
       'Summarizer',
       'Rewriter',
       'Writer',
@@ -81,7 +81,7 @@ class BuiltInAIProvider {
       }
 
       const API = self[apiName];
-      
+
       // Verify API has availability method
       if (typeof API.availability !== 'function') {
         this.apiStatus.set(apiName, {
@@ -93,10 +93,10 @@ class BuiltInAIProvider {
         console.log(`📊 ${apiName} API: exists but no availability() method`);
         return;
       }
-      
+
       // Check availability status
       let availability;
-      
+
       // Different APIs require different parameters for availability check
       if (apiName === 'Translator') {
         // Translator API requires language parameters
@@ -158,7 +158,7 @@ class BuiltInAIProvider {
     // already performed an action to trigger the extension
     // So we always return true for extensions
     return true;
-    
+
     // Original check (kept for reference):
     // if (!navigator.userActivation || !navigator.userActivation.isActive) {
     //   console.warn('⚠️ User activation required for Built-in AI');
@@ -299,7 +299,7 @@ class BuiltInAIProvider {
     try {
       // Check if input is a full prompt (contains instructions)
       const isFullPrompt = textOrPrompt.includes('JSON array') || textOrPrompt.includes('ANALYZE THIS TEXT');
-      
+
       if (isFullPrompt) {
         // Use Prompt API for custom prompts
         return await this.checkGrammarWithPromptAPI(textOrPrompt, options);
@@ -394,7 +394,7 @@ class BuiltInAIProvider {
    */
   async createProofreaderSession(options = {}) {
     const sessionKey = 'proofreader';
-    
+
     // Reuse existing session if available
     if (this.sessions.has(sessionKey)) {
       return this.sessions.get(sessionKey);
@@ -477,7 +477,7 @@ class BuiltInAIProvider {
    */
   async createTranslatorSession(sourceLang, targetLang, options = {}) {
     const sessionKey = `translator_${sourceLang}_${targetLang}`;
-    
+
     // Reuse existing session if available
     if (this.sessions.has(sessionKey)) {
       return this.sessions.get(sessionKey);
@@ -579,7 +579,7 @@ class BuiltInAIProvider {
     };
 
     const sessionKey = `summarizer_${JSON.stringify(config)}`;
-    
+
     if (this.sessions.has(sessionKey)) {
       return this.sessions.get(sessionKey);
     }
@@ -675,7 +675,7 @@ class BuiltInAIProvider {
     };
 
     const sessionKey = `rewriter_${JSON.stringify(config)}`;
-    
+
     if (this.sessions.has(sessionKey)) {
       return this.sessions.get(sessionKey);
     }
@@ -698,17 +698,22 @@ class BuiltInAIProvider {
       const promptWrapper = new PromptWrapper(this);
       const session = await promptWrapper.createSession({
         temperature: options.temperature || 1.0,
-        topK: options.topK || 40
+        topK: options.topK || 40,
+        outputLanguage: options.outputLanguage || 'en' // Required to suppress warnings
       });
-      
+
       const result = await promptWrapper.prompt(session, prompt, options);
-      
+
       // Cleanup session
       promptWrapper.destroySession(session.id);
-      
+
       return result;
     } catch (error) {
       console.error('❌ Content generation error:', error);
+      console.error('❌ Error type:', error.constructor.name);
+      console.error('❌ Error name:', error.name);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Prompt length:', prompt?.length, 'chars');
       throw error;
     }
   }
@@ -724,12 +729,12 @@ class BuiltInAIProvider {
         temperature: options.temperature || 1.0,
         topK: options.topK || 40
       });
-      
+
       const result = await promptWrapper.promptStreaming(session, prompt, options, onChunk);
-      
+
       // Cleanup session
       promptWrapper.destroySession(session.id);
-      
+
       return result;
     } catch (error) {
       console.error('❌ Streaming content generation error:', error);
@@ -899,28 +904,28 @@ class WriterWrapper {
     const config = {
       // Tone options: 'formal', 'neutral', 'casual'
       tone: options.tone || 'neutral',
-      
+
       // Format options: 'markdown', 'plain-text'
       format: options.format || 'markdown',
-      
+
       // Length options: 'short', 'medium', 'long'
       length: options.length || 'medium',
-      
+
       // Language configuration
       expectedInputLanguages: options.expectedInputLanguages,
       expectedContextLanguages: options.expectedContextLanguages,
       outputLanguage: options.outputLanguage,
-      
+
       // Shared context for consistent multi-output generation
       sharedContext: options.sharedContext,
-      
+
       // Download progress monitoring
       monitor: this.provider.monitorDownload('Writer')
     };
 
     // Generate session key for caching
     const sessionKey = `writer_${JSON.stringify(config)}`;
-    
+
     // Reuse existing session if available
     if (this.provider.sessions.has(sessionKey)) {
       console.log('♻️ Reusing existing Writer session');
@@ -930,7 +935,7 @@ class WriterWrapper {
     // Create new session
     console.log('🆕 Creating new Writer session with config:', config);
     const writer = await self.Writer.create(config);
-    
+
     // Cache session for reuse
     this.provider.sessions.set(sessionKey, writer);
 
@@ -1159,18 +1164,18 @@ class PromptWrapper {
       // Build configuration with validated parameters
       const config = {
         // Temperature: controls randomness (0.0 to maxTemperature)
-        temperature: options.temperature !== undefined 
+        temperature: options.temperature !== undefined
           ? Math.min(options.temperature, modelParams.maxTemperature)
           : modelParams.defaultTemperature,
-        
+
         // TopK: controls diversity (1 to maxTopK)
         topK: options.topK !== undefined
           ? Math.min(options.topK, modelParams.maxTopK)
           : modelParams.defaultTopK,
-        
+
         // Output language (required to suppress warnings)
         outputLanguage: options.outputLanguage || 'en',
-        
+
         // Download progress monitoring
         monitor: this.provider.monitorDownload('LanguageModel')
       };
@@ -1181,7 +1186,7 @@ class PromptWrapper {
 
       // Generate unique session ID
       const sessionId = `prompt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Store session for lifecycle management
       this.provider.sessions.set(sessionId, {
         instance: session,
@@ -1231,10 +1236,10 @@ class PromptWrapper {
       const promptOptions = {
         // AbortController support for cancellation
         signal: options.signal,
-        
+
         // JSON schema for structured output
         responseConstraint: options.responseConstraint,
-        
+
         // Omit constraint from input
         omitResponseConstraintInput: options.omitResponseConstraintInput
       };
@@ -1421,30 +1426,30 @@ class PromptWrapper {
       // Build configuration with multimodal support
       const config = {
         // Temperature and topK parameters
-        temperature: options.temperature !== undefined 
+        temperature: options.temperature !== undefined
           ? Math.min(options.temperature, modelParams.maxTemperature)
           : modelParams.defaultTemperature,
         topK: options.topK !== undefined
           ? Math.min(options.topK, modelParams.maxTopK)
           : modelParams.defaultTopK,
-        
+
         // Expected inputs - support text, image, and audio
         expectedInputs: options.expectedInputs || [
           { type: 'text' },
           { type: 'image' }
         ],
-        
+
         // Expected outputs
         expectedOutputs: options.expectedOutputs || [
           { type: 'text' }
         ],
-        
+
         // Initial prompts for context
         initialPrompts: options.initialPrompts || [],
-        
+
         // Output language (required to suppress warnings)
         outputLanguage: options.outputLanguage || 'en',
-        
+
         // Download progress monitoring
         monitor: this.provider.monitorDownload('LanguageModel')
       };
@@ -1454,7 +1459,7 @@ class PromptWrapper {
 
       // Generate unique session ID
       const sessionId = `prompt_multimodal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Store session for lifecycle management
       this.provider.sessions.set(sessionId, {
         instance: session,
@@ -1490,7 +1495,7 @@ class PromptWrapper {
       // No conversion needed - just validate the file type
       const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
       const validAudioTypes = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg'];
-      
+
       if (validImageTypes.includes(file.type)) {
         console.log('✅ Valid image file:', file.type);
         return { type: 'image', value: file };
@@ -1513,16 +1518,16 @@ class PromptWrapper {
   async convertImageUrlToFile(imageUrl) {
     try {
       console.log('📥 Fetching image from URL:', imageUrl);
-      
+
       // Fetch the image
       const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.statusText}`);
       }
-      
+
       // Get the blob
       const blob = await response.blob();
-      
+
       // Determine file type from blob or URL
       let mimeType = blob.type;
       if (!mimeType || mimeType === 'application/octet-stream') {
@@ -1537,13 +1542,13 @@ class PromptWrapper {
         };
         mimeType = mimeTypes[ext] || 'image/png';
       }
-      
+
       // Create File object from blob
       const fileName = imageUrl.split('/').pop().split('?')[0] || 'image.png';
       const file = new File([blob], fileName, { type: mimeType });
-      
+
       console.log('✅ Image converted to File:', file.name, file.type, file.size, 'bytes');
-      
+
       return file;
     } catch (error) {
       console.error('❌ Image URL conversion error:', error);

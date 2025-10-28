@@ -8,24 +8,24 @@ let providerManager = null;
 
 async function initializeProviderManager() {
   if (providerManager) return providerManager;
-  
+
   try {
     // Create provider instances
     const builtinProvider = new BuiltInAIProvider();
     const cloudProvider = new CloudAIProvider();
-    
+
     // Initialize providers
     await builtinProvider.initialize();
     await cloudProvider.initialize();
-    
+
     // Create and initialize manager
     providerManager = new AIProviderManager();
     await providerManager.initialize();
-    
+
     // Register providers
     providerManager.registerProvider('builtin', builtinProvider);
     providerManager.registerProvider('cloud', cloudProvider);
-    
+
     console.log('✅ AI Provider Manager initialized in background');
     return providerManager;
   } catch (error) {
@@ -36,29 +36,29 @@ async function initializeProviderManager() {
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('AI Content Assistant installed');
-  
+
   // Initialize provider manager
   initializeProviderManager().catch(console.error);
-  
+
   // Create context menu items
   chrome.contextMenus.create({
     id: 'translateText',
     title: 'Translate Selected Text',
     contexts: ['selection']
   });
-  
+
   chrome.contextMenus.create({
     id: 'copyToClipboard',
     title: 'Copy to Clipboard',
     contexts: ['selection']
   });
-  
+
   chrome.contextMenus.create({
     id: 'extractImageText',
     title: 'Extract texts from image',
     contexts: ['image']
   });
-  
+
   chrome.contextMenus.create({
     id: 'explainImage',
     title: 'Explain This Image',
@@ -162,16 +162,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     case 'generateContent': {
-      if (request.task === 'textAssist') {
-        // Handle text assist requests directly in background
-        console.log('?? Background: Handling text assist request');
+      if (request.task === 'textAssist' || request.task === 'youtubeSummary') {
+        // Handle text assist and YouTube summary requests directly in background
+        console.log('?? Background: Handling', request.task, 'request');
         handleTextAssist(request.prompt)
           .then(result => {
-            console.log('? Background: Text assist successful');
+            console.log('? Background:', request.task, 'successful');
             sendResponse({ result });
           })
           .catch(error => {
-            console.error('? Background: Text assist error:', error);
+            console.error('? Background:', request.task, 'error:', error);
             sendResponse({ error: error.message });
           });
         return true; // Keep message channel open for async response
@@ -353,15 +353,15 @@ async function handleGrammarCheck(prompt) {
   try {
     // Ensure provider manager is initialized
     const manager = await initializeProviderManager();
-    
+
     console.log('📤 Background: Checking grammar using AI Provider Manager');
-    
+
     // Use provider manager to check grammar
     // The manager will automatically route to the appropriate provider
     const response = await manager.checkGrammar(prompt);
-    
+
     console.log('✅ Background: Grammar check completed via', response.provider);
-    
+
     // Return the data (unwrap from normalized response)
     return response.data;
   } catch (error) {
@@ -375,19 +375,34 @@ async function handleTextAssist(prompt) {
   try {
     // Ensure provider manager is initialized
     const manager = await initializeProviderManager();
-    
+
     console.log('📤 Background: Processing text assist using AI Provider Manager');
-    
+    console.log('📤 Background: Active provider:', manager.getActiveProvider());
+    console.log('📤 Background: Prompt length:', prompt?.length, 'chars');
+
     // Use provider manager to generate content
     // The manager will automatically route to the appropriate provider
     const response = await manager.generateContent(prompt);
-    
-    console.log('✅ Background: Text assist completed via', response.provider);
-    
+
+    console.log('✅ Background: Text assist completed via', response?.provider);
+    console.log('📦 Background: Response structure:', {
+      hasResponse: !!response,
+      hasData: !!response?.data,
+      dataType: typeof response?.data,
+      dataLength: response?.data?.length
+    });
+
     // Return the data (unwrap from normalized response)
+    if (!response || !response.data) {
+      throw new Error('Invalid response from AI provider: missing data');
+    }
+
     return response.data;
   } catch (error) {
     console.error('❌ Text assist error:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error stack:', error.stack);
     throw error;
   }
 }

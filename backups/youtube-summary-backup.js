@@ -3,8 +3,6 @@
 
 class YouTubeSummary {
   constructor() {
-    this.instanceId = Math.random().toString(36).substr(2, 9);
-    console.log(`🆕 YouTubeSummary instance created: ${this.instanceId}`);
     this.videoId = null;
     this.transcript = null;
     this.summaryPanel = null;
@@ -17,12 +15,12 @@ class YouTubeSummary {
     // Only run on YouTube watch pages
     if (!this.isYouTubeWatchPage()) return;
 
-    // Check AI provider settings - buttons should show regardless of provider
-    const providerSettings = await this.getProviderSettings();
-    this.preferredProvider = providerSettings.preferredProvider || 'builtin';
-    this.apiKey = providerSettings.apiKey; // For cloud API fallback
-
-    console.log('YouTube Summary: Using provider:', this.preferredProvider);
+    // Get API key from storage
+    this.apiKey = await this.getApiKey();
+    if (!this.apiKey) {
+      console.log('YouTube Summary: No API key found');
+      return;
+    }
 
     // Extract video ID
     this.videoId = this.getVideoId();
@@ -38,8 +36,8 @@ class YouTubeSummary {
   }
 
   isYouTubeWatchPage() {
-    return window.location.hostname.includes('youtube.com') &&
-      window.location.pathname === '/watch';
+    return window.location.hostname.includes('youtube.com') && 
+           window.location.pathname === '/watch';
   }
 
   getVideoId() {
@@ -51,17 +49,6 @@ class YouTubeSummary {
     return new Promise((resolve) => {
       chrome.storage.local.get(['geminiApiKey'], (result) => {
         resolve(result.geminiApiKey);
-      });
-    });
-  }
-
-  async getProviderSettings() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['preferredProvider', 'geminiApiKey'], (result) => {
-        resolve({
-          preferredProvider: result.preferredProvider || 'builtin',
-          apiKey: result.geminiApiKey
-        });
       });
     });
   }
@@ -88,11 +75,7 @@ class YouTubeSummary {
   }
 
   injectSummaryPanel(secondaryDiv) {
-    // Remove ALL existing panels (in case of duplicate instances)
-    const existingPanels = document.querySelectorAll('#yt-ai-summary-panel');
-    existingPanels.forEach(panel => panel.remove());
-
-    // Also remove this instance's panel reference
+    // Remove existing panel if any
     if (this.summaryPanel) {
       this.summaryPanel.remove();
     }
@@ -185,64 +168,60 @@ class YouTubeSummary {
     const header = this.summaryPanel.querySelector('.yt-summary-header');
     const collapseBtn = this.summaryPanel.querySelector('.yt-summary-collapse');
     const content = this.summaryPanel.querySelector('.yt-summary-content');
-
+    
     const toggleCollapse = (e) => {
       // Prevent double-triggering if clicking the button directly
       e.stopPropagation();
-
+      
       const isCollapsed = content.style.display === 'none';
-
+      
       if (isCollapsed) {
         // Expanding
         content.style.display = 'block';
         content.style.maxHeight = '0px';
         content.style.opacity = '0';
-
+        
         // Force reflow to ensure the initial state is applied
         content.offsetHeight;
-
+        
         // Trigger animation
         content.style.maxHeight = content.scrollHeight + 'px';
         content.style.opacity = '1';
-
+        
         collapseBtn.textContent = '−';
         localStorage.setItem('yt-summary-collapsed', 'false');
       } else {
         // Collapsing - set explicit height first
         const currentHeight = content.scrollHeight;
         content.style.maxHeight = currentHeight + 'px';
-
+        
         // Force reflow to ensure the height is set before transition
         content.offsetHeight;
-
+        
         // Now trigger the collapse animation
         content.style.maxHeight = '0px';
         content.style.opacity = '0';
-
+        
         // Hide after animation completes
         setTimeout(() => {
           content.style.display = 'none';
         }, 300);
-
+        
         collapseBtn.textContent = '+';
         localStorage.setItem('yt-summary-collapsed', 'true');
       }
     };
-
+    
     // Make entire header clickable
     header.addEventListener('click', toggleCollapse);
 
-    // Summary action buttons - use event delegation to avoid duplicate listeners
-    const buttonsContainer = this.summaryPanel.querySelector('.yt-summary-buttons');
-    if (buttonsContainer) {
-      buttonsContainer.addEventListener('click', (e) => {
-        const btn = e.target.closest('.yt-summary-btn');
-        if (btn) {
-          const action = btn.dataset.action;
-          this.handleSummaryAction(action);
-        }
+    // Summary action buttons
+    this.summaryPanel.querySelectorAll('.yt-summary-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const action = e.currentTarget.dataset.action;
+        this.handleSummaryAction(action);
       });
-    }
+    });
 
     // Result action buttons
     this.summaryPanel.querySelector('[data-action="copy"]').addEventListener('click', () => {
@@ -255,8 +234,6 @@ class YouTubeSummary {
   }
 
   async handleSummaryAction(action) {
-    console.log(`🎯 Instance ${this.instanceId} handling action: ${action}`);
-
     // Hide previous results and errors
     this.hideResult();
     this.hideError();
@@ -267,32 +244,25 @@ class YouTubeSummary {
     try {
       // Extract transcript if not already done
       if (!this.transcript) {
-        console.log('📝 Attempting to extract transcript...');
         this.transcript = await this.extractTranscript();
       }
 
       if (!this.transcript) {
-        console.error('❌ No transcript available');
-        throw new Error('No captions available for this video.\n\nTip: If captions exist, try opening the Transcript panel manually first, then click the button again.');
+        throw new Error('No captions available for this video');
       }
 
-      console.log('✅ Transcript available, length:', this.transcript.length);
-
       // Generate summary based on action
-      console.log('🤖 Generating summary for action:', action);
       const summary = await this.generateSummary(action);
-
+      
       if (!summary) {
         throw new Error('Failed to generate summary');
       }
 
-      console.log('✅ Summary generated successfully');
-
       // Display result
       this.showResult(action, summary);
-
+      
     } catch (error) {
-      console.error('❌ YouTube Summary Error:', error);
+      console.error('YouTube Summary Error:', error);
       this.showError(error.message);
     } finally {
       this.hideLoading();
@@ -301,223 +271,158 @@ class YouTubeSummary {
 
   async extractTranscript() {
     try {
-      console.log('🎬 Starting transcript extraction...');
-
-      // SIMPLE METHOD: Just use the transcript panel
-      // This is the most reliable method that actually works
+      console.log('Starting transcript extraction...');
+      
+      // Method 1: Extract from ytInitialPlayerResponse (most reliable)
+      const ytTranscript = await this.extractFromYTInitialData();
+      if (ytTranscript) {
+        console.log('Extracted from ytInitialPlayerResponse');
+        // Store globally for Call Mindy and Chat features
+        window.youtubeTranscript = ytTranscript;
+        return ytTranscript;
+      }
+      
+      // Method 2: Open and scrape YouTube's transcript panel
       const panelTranscript = await this.extractFromTranscriptPanel();
       if (panelTranscript) {
-        console.log('✅ Transcript extracted successfully');
+        console.log('Extracted from transcript panel');
+        // Store globally for Call Mindy and Chat features
         window.youtubeTranscript = panelTranscript;
         return panelTranscript;
       }
+      
+      // Method 3: Try to get captions from YouTube's player response
+      const captionTracks = await this.getCaptionTracks();
+      console.log('Caption tracks found:', captionTracks);
+      
+      if (captionTracks && captionTracks.length > 0) {
+        console.log('Total tracks available:', captionTracks.length);
+        
+        // Prefer English captions, or take the first available
+        const track = captionTracks.find(t => t.languageCode === 'en' || t.languageCode?.startsWith('en')) || captionTracks[0];
+        console.log('Selected track:', track);
+        
+        if (track && track.baseUrl) {
+          // Use background script to fetch (avoid CORS)
+          const transcript = await this.fetchViaBackground(track.baseUrl);
+          if (transcript && transcript.length > 0) {
+            console.log('Transcript extracted via background script');
+            // Store globally for Call Mindy and Chat features
+            window.youtubeTranscript = transcript;
+            return transcript;
+          }
+        }
+      }
 
-      console.log('❌ No transcript available');
+      console.log('No transcript found by any method');
       return null;
     } catch (error) {
-      console.error('❌ Transcript extraction error:', error);
+      console.error('Transcript extraction error:', error);
       return null;
     }
   }
 
   async extractFromYTInitialData() {
     try {
-      console.log('🔍 Searching for ytInitialPlayerResponse...');
-
       // Look for ytInitialPlayerResponse in page scripts
       const scripts = document.querySelectorAll('script');
       for (const script of scripts) {
         const content = script.textContent;
         if (content.includes('ytInitialPlayerResponse')) {
-          // Try multiple regex patterns for different YouTube structures
-          const patterns = [
-            /var ytInitialPlayerResponse = (\{.+?\});/,
-            /ytInitialPlayerResponse\s*=\s*(\{.+?\});/,
-            /"ytInitialPlayerResponse":(\{.+?\}),"/
-          ];
-
-          for (const pattern of patterns) {
-            const match = content.match(pattern);
-            if (match) {
-              try {
-                const data = JSON.parse(match[1]);
-                const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
-                if (captionTracks && captionTracks.length > 0) {
-                  console.log('✅ Found', captionTracks.length, 'caption tracks in ytInitialPlayerResponse');
-
-                  // Prefer English captions, or take the first available
-                  const track = captionTracks.find(t => t.languageCode === 'en' || t.languageCode?.startsWith('en')) || captionTracks[0];
-                  console.log('📝 Selected track:', track.languageCode, track.name?.simpleText);
-
-                  if (track && track.baseUrl) {
-                    const transcript = await this.fetchViaBackground(track.baseUrl);
-                    if (transcript) {
-                      console.log('✅ Transcript fetched successfully, length:', transcript.length);
-                      return transcript;
-                    }
-                  }
-                }
-              } catch (parseError) {
-                console.log('Failed to parse with pattern, trying next...');
-                continue;
+          const match = content.match(/var ytInitialPlayerResponse = (\{.+?\});/);
+          if (match) {
+            const data = JSON.parse(match[1]);
+            const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+            
+            if (captionTracks && captionTracks.length > 0) {
+              console.log('Found captions in ytInitialPlayerResponse');
+              const track = captionTracks.find(t => t.languageCode === 'en') || captionTracks[0];
+              
+              if (track && track.baseUrl) {
+                return await this.fetchViaBackground(track.baseUrl);
               }
             }
           }
         }
       }
-
-      console.log('❌ No ytInitialPlayerResponse found');
       return null;
     } catch (error) {
-      console.error('❌ Error extracting from ytInitialData:', error);
+      console.error('Error extracting from ytInitialData:', error);
       return null;
     }
   }
 
   async extractFromTranscriptPanel() {
     try {
-      console.log('🔍 Looking for transcript...');
-
-      // Check if transcript is already loaded in DOM - be specific to avoid duplicates
-      const engagementPanel = document.querySelector('ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-transcript"]');
-      let segments = engagementPanel
-        ? engagementPanel.querySelectorAll('ytd-transcript-segment-renderer')
-        : document.querySelectorAll('ytd-transcript-segment-renderer');
-
-      if (segments.length > 0) {
-        console.log(`✅ Transcript already loaded, extracting from ${segments.length} segments...`);
-        return this.extractSegmentsFromDOM(segments);
-      }
-
-      // Find the main Transcript button (the one that opens the panel)
+      console.log('Looking for transcript button...');
+      
+      // Find the "Show transcript" button
       const buttons = document.querySelectorAll('button');
       let transcriptButton = null;
-
+      
       for (const button of buttons) {
-        const ariaLabel = (button.getAttribute('aria-label') || '').toLowerCase();
-        const buttonText = (button.textContent || '').toLowerCase();
-
-        // Look for the main transcript button (not inside a panel)
-        if ((ariaLabel.includes('transcript') || buttonText.includes('transcript')) &&
-          !button.closest('ytd-engagement-panel-section-list-renderer')) {
+        const ariaLabel = button.getAttribute('aria-label');
+        if (ariaLabel && (ariaLabel.includes('transcript') || ariaLabel.includes('Transcript'))) {
           transcriptButton = button;
           break;
         }
       }
-
+      
+      // Also try by looking for specific selectors
       if (!transcriptButton) {
-        console.log('❌ Transcript button not found');
+        transcriptButton = document.querySelector('[aria-label*="Show transcript"]') ||
+                          document.querySelector('button[aria-label*="transcript"]');
+      }
+      
+      if (!transcriptButton) {
+        console.log('Transcript button not found');
         return null;
       }
-
-      console.log('✅ Found transcript button, clicking to open panel...');
+      
+      console.log('Found transcript button, clicking...');
       transcriptButton.click();
-
-      // Wait for panel to open
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // Check if we need to click a Transcript tab inside the panel
-      // (This happens when Chapters panel opens first)
-      const transcriptTab = Array.from(document.querySelectorAll('button')).find(btn => {
-        const text = (btn.textContent || '').toLowerCase().trim();
-        return text === 'transcript' && btn.closest('ytd-engagement-panel-section-list-renderer');
-      });
-
-      if (transcriptTab) {
-        console.log('✅ Found Transcript tab inside panel, clicking...');
-        transcriptTab.click();
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
-
-      // Poll for transcript segments
-      let attempts = 0;
-      const maxAttempts = 30; // 15 seconds
-
-      console.log('⏳ Waiting for transcript to load...');
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Only get segments from the visible engagement panel to avoid duplicates
-        const engagementPanel = document.querySelector('ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-transcript"]');
-        if (engagementPanel) {
-          segments = engagementPanel.querySelectorAll('ytd-transcript-segment-renderer');
-        } else {
-          // Fallback to all segments if panel not found
-          segments = document.querySelectorAll('ytd-transcript-segment-renderer');
-        }
-
-        if (segments.length > 0) {
-          console.log(`✅ Transcript loaded after ${(attempts + 1) * 500}ms`);
-          console.log(`📊 Found ${segments.length} segments in ${engagementPanel ? 'engagement panel' : 'document'}`);
-          break;
-        }
-        attempts++;
-      }
-
+      
+      // Wait for transcript panel to load
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Extract transcript from panel
+      const segments = document.querySelectorAll('ytd-transcript-segment-renderer');
+      console.log('Found', segments.length, 'transcript segments');
+      
       if (segments.length === 0) {
-        console.log('❌ Transcript did not load after 15 seconds');
+        console.log('No transcript segments found');
+        // Close the panel
+        transcriptButton.click();
         return null;
       }
-
-      // Extract and leave panel open
-      const transcript = this.extractSegmentsFromDOM(segments);
-      console.log('✅ Transcript extracted, leaving panel open');
-
-      return transcript;
+      
+      let transcript = '';
+      segments.forEach(segment => {
+        const timestampEl = segment.querySelector('.segment-timestamp');
+        const textEl = segment.querySelector('.segment-text');
+        
+        if (timestampEl && textEl) {
+          const timestamp = timestampEl.textContent.trim();
+          const text = textEl.textContent.trim();
+          transcript += `[${timestamp}] ${text}\n`;
+        }
+      });
+      
+      // Close the panel
+      console.log('Closing transcript panel...');
+      transcriptButton.click();
+      
+      return transcript.length > 0 ? transcript : null;
     } catch (error) {
-      console.error('❌ Error extracting transcript:', error);
+      console.error('Error extracting from transcript panel:', error);
       return null;
     }
-  }
-
-  extractSegmentsFromDOM(segments) {
-    console.log(`📝 Extracting from ${segments.length} transcript segments`);
-
-    let transcript = '';
-    let segmentCount = 0;
-    const seenSegments = new Set(); // Track seen segments to avoid duplicates
-
-    segments.forEach(segment => {
-      const timestampEl = segment.querySelector('.segment-timestamp');
-      const textEl = segment.querySelector('.segment-text');
-
-      if (timestampEl && textEl) {
-        const timestamp = timestampEl.textContent.trim();
-        const text = textEl.textContent.trim();
-        const segmentKey = `${timestamp}:${text}`; // Unique key for this segment
-
-        // Skip if we've already seen this exact segment
-        if (seenSegments.has(segmentKey)) {
-          console.warn(`⚠️ Skipping duplicate segment: [${timestamp}]`);
-          return;
-        }
-
-        seenSegments.add(segmentKey);
-        transcript += `[${timestamp}] ${text}\n`;
-        segmentCount++;
-      }
-    });
-
-    console.log(`✅ Extracted ${segmentCount} segments, total length: ${transcript.length} chars`);
-    console.log(`📊 Average chars per segment: ${Math.round(transcript.length / segmentCount)}`);
-
-    // Check for duplication in the final transcript
-    const halfLength = Math.floor(transcript.length / 2);
-    const firstHalf = transcript.substring(0, halfLength);
-    const secondHalf = transcript.substring(halfLength);
-    if (firstHalf === secondHalf) {
-      console.error('🚨 DUPLICATION DETECTED in final transcript! Deduplicating...');
-      transcript = firstHalf;
-    }
-
-    return transcript.length > 0 ? transcript : null;
   }
 
   async fetchViaBackground(url) {
     try {
       console.log('Fetching via background script:', url);
-
+      
       return new Promise((resolve) => {
         chrome.runtime.sendMessage({
           action: 'fetchTranscript',
@@ -542,7 +447,7 @@ class YouTubeSummary {
       // Construct YouTube timedtext API URL
       const url = `https://www.youtube.com/api/timedtext?v=${this.videoId}&lang=en`;
       console.log('Trying direct API:', url);
-
+      
       const response = await fetch(url);
       if (!response.ok) {
         console.log('Direct API failed, trying with auto-generated captions');
@@ -555,7 +460,7 @@ class YouTubeSummary {
         const xmlText = await autoResponse.text();
         return this.parseTranscriptXML(xmlText);
       }
-
+      
       const xmlText = await response.text();
       return this.parseTranscriptXML(xmlText);
     } catch (error) {
@@ -569,14 +474,14 @@ class YouTubeSummary {
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
       const textNodes = xmlDoc.querySelectorAll('text');
-
+      
       if (textNodes.length === 0) {
         console.log('No text nodes found in XML');
         return null;
       }
-
+      
       console.log('Found', textNodes.length, 'text nodes');
-
+      
       let transcript = '';
       textNodes.forEach((node, index) => {
         // Get raw text content (browser automatically decodes HTML entities)
@@ -584,7 +489,7 @@ class YouTubeSummary {
           .replace(/\n/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
-
+        
         if (text) {
           const start = parseFloat(node.getAttribute('start'));
           if (!isNaN(start)) {
@@ -597,12 +502,13 @@ class YouTubeSummary {
           }
         }
       });
-
+      
       if (transcript.length > 0) {
         console.log('Transcript created, length:', transcript.length);
+        console.log('First 200 chars:', transcript.substring(0, 200));
         return transcript;
       }
-
+      
       console.log('Transcript is empty after parsing');
       return null;
     } catch (error) {
@@ -624,7 +530,7 @@ class YouTubeSummary {
             /"captionTracks":(\[[^\]]+\])/,
             /captionTracks":\s*(\[.*?\}\])/s
           ];
-
+          
           for (const pattern of patterns) {
             const match = content.match(pattern);
             if (match) {
@@ -642,7 +548,7 @@ class YouTubeSummary {
           }
         }
       }
-
+      
       // Fallback: Try to find ytInitialPlayerResponse
       for (const script of scripts) {
         const content = script.textContent;
@@ -662,7 +568,7 @@ class YouTubeSummary {
           }
         }
       }
-
+      
       return null;
     } catch (error) {
       console.error('Error getting caption tracks:', error);
@@ -674,21 +580,21 @@ class YouTubeSummary {
     try {
       console.log('Fetching captions from:', baseUrl);
       const response = await fetch(baseUrl);
-
+      
       if (!response.ok) {
         console.log('Caption fetch failed with status:', response.status);
         return null;
       }
-
+      
       const xmlText = await response.text();
       console.log('XML response length:', xmlText.length);
       console.log('XML preview:', xmlText.substring(0, 200));
-
+      
       if (!xmlText || xmlText.length === 0) {
         console.log('Empty XML response');
         return null;
       }
-
+      
       // Use the shared XML parser
       return this.parseTranscriptXML(xmlText);
     } catch (error) {
@@ -718,254 +624,24 @@ class YouTubeSummary {
   }
 
   async generateSummary(action) {
-    const MAX_CHUNK_SIZE = 26000; // Increased for better performance - fits most videos in one chunk
-
-    console.log('📊 Summary generation:', {
-      provider: this.preferredProvider,
-      transcriptLength: this.transcript.length,
-      hasApiKey: !!this.apiKey
-    });
-
-    // ALWAYS use chunking for Built-in AI with long transcripts
-    // This prevents QuotaExceededError even if Cloud API key exists
-    const needsChunking = this.preferredProvider === 'builtin' && this.transcript.length > MAX_CHUNK_SIZE;
-
-    console.log(`🔍 Chunking decision: transcript=${this.transcript.length} chars, max=${MAX_CHUNK_SIZE}, needsChunking=${needsChunking}`);
-
-    if (needsChunking) {
-      console.log(`📦 Transcript is long (${this.transcript.length} chars > ${MAX_CHUNK_SIZE}), using chunked processing`);
-      return await this.generateSummaryChunked(action);
-    }
-
-    // For Cloud API or short transcripts, process normally
-    console.log(`📝 Processing full transcript (${this.transcript.length} chars ≤ ${MAX_CHUNK_SIZE}) in single request`);
-
     const prompts = {
       tldr: `Create a concise TLDR summary of this video transcript with 3-5 bullet points highlighting the most important information. Make it quick to read and understand.\n\nTranscript:\n${this.transcript}`,
-
+      
       detailed: `Create a detailed, comprehensive summary of this video with clear sections. Include main topics discussed, key points, and important timestamps. Format with proper headings and structure.\n\nTranscript:\n${this.transcript}`,
-
+      
       concepts: `Identify and explain the key concepts, terms, and topics discussed in this video. For each concept, provide a clear, concise explanation. Format as a list with concept names in bold.\n\nTranscript:\n${this.transcript}`,
-
+      
       chapters: `Generate timestamped chapters for this video. Create 5-8 chapters that divide the content into logical sections. Format as: [timestamp] - Chapter title and brief description.\n\nTranscript:\n${this.transcript}`,
-
+      
       takeaways: `Extract the main takeaways and actionable insights from this video. List 4-6 key lessons or action items that viewers should remember. Format as numbered points.\n\nTranscript:\n${this.transcript}`,
-
+      
       notes: `Create a structured study guide or notes template from this video. Include: Overview, Main Topics (with sub-points), Key Terms, and Summary. Format for easy note-taking.\n\nTranscript:\n${this.transcript}`,
-
+      
       social: `Create 3 social media posts from this video:\n1. A Twitter/X post (280 chars max, include 2-3 hashtags)\n2. A LinkedIn post (professional tone, 2-3 paragraphs)\n3. An Instagram caption (engaging, with emojis and 5-8 hashtags)\n\nTranscript:\n${this.transcript}`
     };
 
     const prompt = prompts[action];
-
-    console.log('� Tralnscript character count:', this.transcript.length);
-    console.log('📏 Prompt character count:', prompt.length);
-
-    try {
-      // Use AI Provider Manager via background script (respects user's provider choice)
-      console.log('📤 Generating summary using AI Provider Manager');
-      console.log('📍 Preferred provider:', this.preferredProvider);
-
-      const response = await new Promise((resolve, reject) => {
-        // Add timeout to prevent hanging forever
-        const timeout = setTimeout(() => {
-          reject(new Error('Request timed out after 60 seconds'));
-        }, 60000);
-
-        chrome.runtime.sendMessage({
-          action: 'generateContent',
-          task: 'youtubeSummary',
-          prompt: prompt
-        }, (response) => {
-          clearTimeout(timeout);
-
-          console.log('📥 Received response from background:', response);
-
-          if (chrome.runtime.lastError) {
-            console.error('❌ Chrome runtime error:', chrome.runtime.lastError);
-            reject(new Error(chrome.runtime.lastError.message));
-          } else if (response?.error) {
-            console.error('❌ Response contains error:', response.error);
-            reject(new Error(response.error));
-          } else if (response?.result) {
-            console.log('✅ Response contains result, length:', response.result?.length);
-            resolve(response.result);
-          } else {
-            console.error('❌ Invalid response structure:', response);
-            reject(new Error('No response from background script'));
-          }
-        });
-      });
-
-      console.log('✅ Summary generated successfully');
-      return response;
-    } catch (error) {
-      console.error('❌ Summary generation error:', error);
-      console.error('❌ Full error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-
-      // Just throw the original error - don't mask it
-      throw error;
-    }
-  }
-
-  async generateSummaryChunked(action) {
-    const MAX_CHUNK_SIZE = 26000; // Match the size from generateSummary
-    const chunks = [];
-
-    // Split transcript into chunks
-    for (let i = 0; i < this.transcript.length; i += MAX_CHUNK_SIZE) {
-      chunks.push(this.transcript.substring(i, i + MAX_CHUNK_SIZE));
-    }
-
-    console.log(`📦 Split transcript into ${chunks.length} chunks (${MAX_CHUNK_SIZE} chars each)`);
-
-    // Process each chunk (no UI updates - just console logs)
-    const chunkSummaries = [];
-    for (let i = 0; i < chunks.length; i++) {
-      console.log(`🔄 Processing chunk ${i + 1}/${chunks.length}...`);
-      console.log(`� Chunk  ${i + 1} transcript length:`, chunks[i].length, 'chars');
-
-      const chunkPrompt = this.buildChunkPrompt(action, chunks[i], i + 1, chunks.length);
-      console.log(`📏 Chunk ${i + 1} prompt length:`, chunkPrompt.length, 'chars');
-
-      try {
-        const response = await new Promise((resolve, reject) => {
-          // Add timeout to prevent hanging forever
-          const timeout = setTimeout(() => {
-            reject(new Error(`Chunk ${i + 1} timed out after 60 seconds`));
-          }, 60000);
-
-          chrome.runtime.sendMessage({
-            action: 'generateContent',
-            task: 'youtubeSummary',
-            prompt: chunkPrompt
-          }, (response) => {
-            clearTimeout(timeout);
-
-            console.log(`📥 Chunk ${i + 1} received response:`, response);
-
-            if (chrome.runtime.lastError) {
-              console.error(`❌ Chunk ${i + 1} Chrome runtime error:`, chrome.runtime.lastError);
-              reject(new Error(chrome.runtime.lastError.message));
-            } else if (response?.error) {
-              console.error(`❌ Chunk ${i + 1} response contains error:`, response.error);
-              reject(new Error(response.error));
-            } else if (response?.result) {
-              console.log(`✅ Chunk ${i + 1} response contains result, length:`, response.result?.length);
-              resolve(response.result);
-            } else {
-              reject(new Error('No response from background script'));
-            }
-          });
-        });
-
-        chunkSummaries.push(response);
-        console.log(`✅ Chunk ${i + 1} processed`);
-
-      } catch (error) {
-        console.error(`❌ Error processing chunk ${i + 1}:`, error);
-
-        // Provide helpful error messages for common issues
-        if (error.message.includes('Both providers are unavailable')) {
-          throw new Error('Built-in AI is not available. Please ensure Chrome has the necessary AI models downloaded, or switch to Cloud API in settings.');
-        } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
-          throw new Error('AI quota exceeded. Please wait a moment and try again, or try a shorter video.');
-        }
-
-        throw error;
-      }
-    }
-
-    // Combine chunk summaries
-    console.log('🔗 Combining chunk summaries...');
-    return await this.combineSummaries(action, chunkSummaries);
-  }
-
-  buildChunkPrompt(action, chunk, chunkNum, totalChunks) {
-    const chunkInfo = totalChunks > 1 ? `\n\n[This is part ${chunkNum} of ${totalChunks} of the transcript]` : '';
-
-    const prompts = {
-      tldr: `Summarize the key points from this part of a video transcript. Focus on the main ideas and important information.${chunkInfo}\n\nTranscript:\n${chunk}`,
-
-      detailed: `Provide a detailed summary of this part of the video. Include main topics and key points discussed.${chunkInfo}\n\nTranscript:\n${chunk}`,
-
-      concepts: `Identify and explain the key concepts and topics in this part of the video.${chunkInfo}\n\nTranscript:\n${chunk}`,
-
-      chapters: `Identify the main topics and timestamps in this part of the video.${chunkInfo}\n\nTranscript:\n${chunk}`,
-
-      takeaways: `Extract the main takeaways and insights from this part of the video.${chunkInfo}\n\nTranscript:\n${chunk}`,
-
-      notes: `Create notes for this part of the video, including main topics and key points.${chunkInfo}\n\nTranscript:\n${chunk}`,
-
-      social: `Extract the most interesting and shareable content from this part of the video.${chunkInfo}\n\nTranscript:\n${chunk}`
-    };
-
-    return prompts[action];
-  }
-
-  async combineSummaries(action, summaries) {
-    if (summaries.length === 1) {
-      return summaries[0];
-    }
-
-    // Combine all chunk summaries
-    const combined = summaries.join('\n\n---\n\n');
-
-    // Create a final synthesis prompt
-    const synthesisPrompts = {
-      tldr: `Based on these summaries from different parts of a video, create a unified TLDR with 3-5 bullet points:\n\n${combined}`,
-
-      detailed: `Combine these summaries into a cohesive detailed summary with clear sections:\n\n${combined}`,
-
-      concepts: `Combine these concepts into a unified list, removing duplicates:\n\n${combined}`,
-
-      chapters: `Organize these topics into 5-8 timestamped chapters:\n\n${combined}`,
-
-      takeaways: `Combine these takeaways into a unified list of 4-6 main points:\n\n${combined}`,
-
-      notes: `Combine these notes into a structured study guide:\n\n${combined}`,
-
-      social: `Based on this content, create 3 social media posts (Twitter, LinkedIn, Instagram):\n\n${combined}`
-    };
-
-    const synthesisPrompt = synthesisPrompts[action];
-
-    console.log('🎯 Creating final synthesis...');
-
-    try {
-      const response = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          action: 'generateContent',
-          task: 'youtubeSummary',
-          prompt: synthesisPrompt
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else if (response?.error) {
-            reject(new Error(response.error));
-          } else if (response?.result) {
-            resolve(response.result);
-          } else {
-            reject(new Error('No response from background script'));
-          }
-        });
-      });
-
-      console.log('✅ Final synthesis complete');
-      return response;
-    } catch (error) {
-      console.error('❌ Error in synthesis:', error);
-      // Don't return combined summaries - they're not user-friendly
-      // Instead, return a simple error message
-      throw new Error('Failed to create final summary. Please try again.');
-    }
-  }
-
-  async generateSummaryWithCloudAPI(prompt) {
+    
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${this.apiKey}`, {
         method: 'POST',
@@ -992,7 +668,7 @@ class YouTubeSummary {
       const data = await response.json();
       return data.candidates[0].content.parts[0].text;
     } catch (error) {
-      console.error('❌ Cloud API fallback error:', error);
+      console.error('Gemini API error:', error);
       throw error;
     }
   }
@@ -1023,11 +699,11 @@ class YouTubeSummary {
     };
 
     titleSpan.textContent = titles[action];
-
+    
     // Format the content with proper line breaks and styling
     const formattedContent = this.formatSummaryContent(summary, action);
     contentDiv.innerHTML = formattedContent;
-
+    
     // Store current summary for copying
     this.currentSummary = summary;
 
@@ -1053,7 +729,7 @@ class YouTubeSummary {
 
     // Make timestamps clickable for chapters
     if (action === 'chapters') {
-      formatted = formatted.replace(/\[(\d+):(\d+)\]/g,
+      formatted = formatted.replace(/\[(\d+):(\d+)\]/g, 
         '<span class="yt-timestamp" data-time="$1:$2">[$1:$2]</span>');
     }
 
@@ -1066,7 +742,7 @@ class YouTubeSummary {
       ts.style.cursor = 'pointer';
       ts.style.color = '#3ea6ff';
       ts.style.textDecoration = 'underline';
-
+      
       ts.addEventListener('click', () => {
         const time = ts.dataset.time;
         this.seekToTimestamp(time);
@@ -1095,13 +771,11 @@ class YouTubeSummary {
   showError(message) {
     const errorDiv = this.summaryPanel.querySelector('.yt-summary-error');
     const errorText = this.summaryPanel.querySelector('.yt-error-text');
-
-    // Support multi-line error messages
-    errorText.innerHTML = message.replace(/\n/g, '<br>');
+    errorText.textContent = message;
     errorDiv.style.display = 'flex';
-
-    // Auto-hide after 10 seconds for longer messages
-    setTimeout(() => this.hideError(), 10000);
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => this.hideError(), 5000);
   }
 
   hideError() {
@@ -1114,13 +788,13 @@ class YouTubeSummary {
 
     try {
       await navigator.clipboard.writeText(this.currentSummary);
-
+      
       // Show feedback
       const copyBtn = this.summaryPanel.querySelector('[data-action="copy"]');
       const originalText = copyBtn.textContent;
       copyBtn.textContent = '✓';
       copyBtn.style.color = '#0f0';
-
+      
       setTimeout(() => {
         copyBtn.textContent = originalText;
         copyBtn.style.color = '';
@@ -1142,7 +816,7 @@ class YouTubeSummary {
           this.videoId = this.getVideoId();
           this.transcript = null;
           this.currentSummary = null;
-
+          
           // Wait and reinject panel
           setTimeout(() => {
             const secondary = document.querySelector('#secondary');
@@ -1162,27 +836,11 @@ class YouTubeSummary {
   }
 }
 
-// Initialize when page loads - ensure only one instance
-// Use a unique marker to prevent duplicate initialization
-(function () {
-  // Check if already initialized
-  if (window.__youtubeAISummaryInitialized) {
-    console.log('YouTube Summary already initialized, skipping...');
-    return;
-  }
-
-  window.__youtubeAISummaryInitialized = true;
-  console.log('Initializing YouTube Summary...');
-
-  const initSummary = () => {
-    if (!window.youtubeAISummary) {
-      window.youtubeAISummary = new YouTubeSummary();
-    }
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSummary, { once: true });
-  } else {
-    initSummary();
-  }
-})();
+// Initialize when page loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    new YouTubeSummary();
+  });
+} else {
+  new YouTubeSummary();
+}

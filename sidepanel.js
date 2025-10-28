@@ -304,8 +304,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'generateContent') {
-    // Ignore textAssist tasks - they're handled in background.js
-    if (request.task === 'textAssist') {
+    // Ignore textAssist and youtubeSummary tasks - they're handled in background.js
+    if (request.task === 'textAssist' || request.task === 'youtubeSummary') {
       return;
     }
     currentTask = request;
@@ -870,6 +870,13 @@ async function generateContent(task) {
   showLoading(true);
   document.getElementById('actionButtons').style.display = 'none';
 
+  // Add timeout to prevent infinite spinning (60 seconds)
+  const timeoutId = setTimeout(() => {
+    showLoading(false);
+    showResult('❌ Request timed out. The content may be too large. Try a smaller page or use Cloud AI.', 'error');
+    document.getElementById('actionButtons').style.display = 'flex';
+  }, 60000);
+
   try {
     const manager = await initializeSidePanelProviderManager();
     const activeProvider = manager.getActiveProvider();
@@ -879,13 +886,27 @@ async function generateContent(task) {
     if (task.task === 'summarize' && activeProvider === 'builtin') {
       try {
         console.log('📄 Using Built-in AI Summarizer API');
-        const response = await manager.summarizeContent(task.content, {
-          type: 'key-points',
-          format: 'markdown',
-          length: 'short'
-        });
-        result = response.data;
-        console.log('✅ Summarized using Built-in AI Summarizer API');
+        
+        // Built-in Summarizer has input limits (~4000 tokens / ~16000 chars)
+        // For large content, chunk it or use prompt-based approach
+        const MAX_SUMMARIZER_LENGTH = 15000;
+        
+        if (task.content.length > MAX_SUMMARIZER_LENGTH) {
+          console.warn(`⚠️ Content too large (${task.content.length} chars), using prompt-based approach`);
+          // Use prompt-based for large content
+          const prompt = await buildPrompt(task);
+          const response = await manager.generateContent(prompt);
+          result = response.data;
+        } else {
+          // Use Summarizer API for smaller content
+          const response = await manager.summarizeContent(task.content, {
+            type: 'key-points',
+            format: 'markdown',
+            length: 'medium'  // Changed from 'short' to 'medium' for more detail
+          });
+          result = response.data;
+          console.log('✅ Summarized using Built-in AI Summarizer API');
+        }
       } catch (error) {
         console.warn('⚠️ Built-in Summarizer failed, falling back to prompt-based:', error);
         // Fallback to prompt-based summarization
@@ -899,14 +920,32 @@ async function generateContent(task) {
       result = await callGeminiApi(prompt);
     }
 
+    clearTimeout(timeoutId); // Clear timeout on success
     showResult(result, 'success');
     saveToHistory(task, result);
     document.getElementById('actionButtons').style.display = 'flex';
   } catch (error) {
+    clearTimeout(timeoutId); // Clear timeout on error
     console.error('Error generating content:', error);
     console.error('Error stack:', error.stack);
-    const errorMessage = error.message || 'Unknown error occurred';
-    showResult(`❌ Error: ${errorMessage}`, 'error');
+    
+    // Provide helpful error messages
+    let errorMessage = error.message || 'Unknown error occurred';
+    
+    if (errorMessage.includes('Both providers are unavailable')) {
+      errorMessage = '❌ Both AI providers are unavailable.\n\n' +
+        '• Built-in AI: May not be ready or content is too large\n' +
+        '• Cloud AI: Requires API key configuration\n\n' +
+        'Please configure your Gemini API key in Settings or try a smaller page.';
+    } else if (errorMessage.includes('Summarizer API not available')) {
+      errorMessage = '❌ Summarizer API is not available.\n\n' +
+        'Please ensure you have Chrome 138+ and Gemini Nano is downloaded.\n' +
+        'Visit chrome://on-device-internals to check status.';
+    } else if (errorMessage.includes('User activation required')) {
+      errorMessage = '❌ User interaction required. Please click the button again.';
+    }
+    
+    showResult(errorMessage, 'error');
   }
 
   showLoading(false);
@@ -918,14 +957,19 @@ async function buildPrompt(task) {
   const langName = getLanguageName(targetLang);
 
   const prompts = {
-    'summarize': `Create a TLDR summary of the following content. 
+    'summarize': `Create an engaging and informative summary of the following content.
 
-RULES:
-- Use EXACTLY 3-5 bullet points (• symbol)
-- Each bullet point should be ONE concise sentence (max 20 words)
-- Focus ONLY on key facts, main ideas, or critical takeaways
-- NO introductions, NO conclusions, NO fluff
-- Start directly with the bullets
+STRUCTURE:
+1. **🎯 Main Point** - One sentence capturing the core message (use bold)
+2. **📋 Key Takeaways** - 5-7 bullet points with the most important information
+3. **💡 Notable Details** - 2-3 interesting facts or insights worth knowing
+
+STYLE:
+- Make it informative yet easy to scan
+- Use emojis sparingly for visual interest
+- Keep each bullet point clear and specific (15-25 words)
+- Focus on actionable insights and key facts
+- Make it engaging - this should be fun to read!
 
 Content:
 ${task.content}`,
