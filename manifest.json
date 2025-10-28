@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Mentelo",
   "version": "1.0.0",
-  "description": "AI-powered content assistant with summarization, translation, mindmap, and social media content generation",
+  "description": "Hybrid AI content assistant powered by Chrome Built-in AI (Gemini Nano) with Cloud API fallback. Features: grammar checking, translation, summarization, content generation - all with privacy-first, offline-capable AI.",
   "permissions": [
     "activeTab",
     "storage",
@@ -36,7 +36,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js", "textfield-assistant.js", "grammar-checker.js", "gemini-live-connection.js", "audio-processor.js", "youtube-summary.js"],
+      "js": ["provider-status-ui.js", "content.js", "textfield-assistant.js", "grammar-checker.js", "gemini-live-connection.js", "audio-processor.js", "youtube-summary.js"],
       "css": ["content.css", "textfield-assistant.css", "grammar-checker.css", "gemini-live-modal.css", "youtube-summary.css"],
       "run_at": "document_idle"
     },
@@ -49,7 +49,18 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*.png", "sidepanel.html", "gemini-live-modal.html", "gemini-live-page-script.js", "audio-bridge.html", "microphone-processor.js"],
+      "resources": [
+        "icons/*.png", 
+        "sidepanel.html", 
+        "gemini-live-modal.html", 
+        "gemini-live-page-script.js", 
+        "audio-bridge.html", 
+        "microphone-processor.js",
+        "ai-provider-manager.js",
+        "builtin-ai-provider.js",
+        "cloud-ai-provider.js",
+        "provider-status-ui.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],

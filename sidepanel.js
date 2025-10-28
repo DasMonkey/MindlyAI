@@ -3,6 +3,60 @@ let currentTask = null;
 let apiKey = null;
 let pageContent = null;
 let chatHistory = [];
+
+// AI Provider Manager (initialized on load)
+let sidePanelProviderManager = null;
+
+// Initialize AI Provider Manager for sidepanel
+async function initializeSidePanelProviderManager() {
+  if (sidePanelProviderManager) return sidePanelProviderManager;
+  
+  try {
+    // Create provider instances
+    const builtinProvider = new BuiltInAIProvider();
+    const cloudProvider = new CloudAIProvider();
+    
+    // Initialize providers
+    await builtinProvider.initialize();
+    await cloudProvider.initialize();
+    
+    // Create and initialize manager
+    sidePanelProviderManager = new AIProviderManager();
+    await sidePanelProviderManager.initialize();
+    
+    // Register providers
+    sidePanelProviderManager.registerProvider('builtin', builtinProvider);
+    sidePanelProviderManager.registerProvider('cloud', cloudProvider);
+    
+    console.log('✅ AI Provider Manager initialized in sidepanel');
+    return sidePanelProviderManager;
+  } catch (error) {
+    console.error('❌ Error initializing sidepanel provider manager:', error);
+    throw error;
+  }
+}
+
+// Initialize provider status badge in sidepanel
+let providerStatusUI = null;
+let providerBadge = null;
+
+async function initializeProviderBadge() {
+  try {
+    if (typeof ProviderStatusUI === 'undefined') {
+      console.warn('⚠️ ProviderStatusUI not available');
+      return;
+    }
+
+    // Create provider status UI instance
+    providerStatusUI = new ProviderStatusUI();
+    await providerStatusUI.initialize(sidePanelProviderManager);
+
+    // Badge removed - no longer showing in header
+    console.log('✅ Provider status UI initialized (badge disabled)');
+  } catch (error) {
+    console.error('❌ Error initializing provider status UI:', error);
+  }
+}
 // Track whether the user has interacted via chat or Mindy
 let sessionActivity = {
   hasInteraction: false,
@@ -109,6 +163,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadClipboardHistory();
   await loadPDFModeFromStorage();
   await loadUserAccount();
+  await initializeProviderSettings(); // Initialize AI provider settings
+  await initializeSidePanelProviderManager(); // Initialize AI Provider Manager
+  await initializeProviderBadge(); // Initialize provider status badge
   setupEventListeners();
   checkApiStatus();
   startClipboardMonitoring();
@@ -200,6 +257,26 @@ function setupEventListeners() {
   document.getElementById('mindyNewSessionBtn').addEventListener('click', startFreshMindySession);
   document.getElementById('mindyMuteBtn').addEventListener('click', toggleMindyMute);
   document.getElementById('mindyEndBtn').addEventListener('click', endMindyCall);
+  
+  // Open Built-in AI Test Page
+  const openTestPageBtn = document.getElementById('openTestPageBtn');
+  if (openTestPageBtn) {
+    openTestPageBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('test-builtin-ai-complete.html') });
+    });
+  }
+
+  // Provider dashboard refresh
+  const refreshBtn = document.getElementById('refreshProviderStatus');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '🔄 Refreshing...';
+      await updateProviderDashboard();
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '🔄 Refresh Status';
+    });
+  }
 }
 
 // Listen for tab activation changes
@@ -284,6 +361,262 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Don't return true for other messages - these are fire-and-forget
 });
 
+// ==================== AI PROVIDER SETTINGS ====================
+
+// Initialize provider settings
+async function initializeProviderSettings() {
+  // Load saved provider preference
+  const result = await chrome.storage.local.get(['preferredProvider']);
+  const preferredProvider = result.preferredProvider || 'builtin';
+  
+  // Set radio button
+  const radio = document.getElementById(preferredProvider === 'builtin' ? 'builtinRadio' : 'cloudRadio');
+  if (radio) {
+    radio.checked = true;
+    updateProviderSelection(preferredProvider);
+  }
+  
+  // Check provider availability
+  await updateProviderStatus();
+  
+  // Setup event listeners
+  document.getElementById('builtinRadio')?.addEventListener('change', handleProviderChange);
+  document.getElementById('cloudRadio')?.addEventListener('change', handleProviderChange);
+  
+  // Make provider options clickable
+  document.getElementById('builtinProvider')?.addEventListener('click', () => {
+    document.getElementById('builtinRadio').checked = true;
+    handleProviderChange({ target: document.getElementById('builtinRadio') });
+  });
+  
+  document.getElementById('cloudProvider')?.addEventListener('click', () => {
+    document.getElementById('cloudRadio').checked = true;
+    handleProviderChange({ target: document.getElementById('cloudRadio') });
+  });
+}
+
+// Handle provider selection change
+async function handleProviderChange(event) {
+  const provider = event.target.value;
+  
+  // Check if Cloud AI is selected but API key is not configured
+  if (provider === 'cloud' && !apiKey) {
+    alert('⚠️ Cloud AI requires a Gemini API key.\n\nPlease configure your API key in Settings first, or use Built-in AI which works without an API key.');
+    
+    // Revert to Built-in AI
+    const builtinRadio = document.getElementById('builtinRadio');
+    if (builtinRadio) {
+      builtinRadio.checked = true;
+      updateProviderSelection('builtin');
+    }
+    return;
+  }
+  
+  // Save preference (for backward compatibility)
+  await chrome.storage.local.set({ preferredProvider: provider });
+  
+  // Update sidepanel provider manager
+  if (sidePanelProviderManager) {
+    try {
+      await sidePanelProviderManager.setProvider(provider);
+      console.log(`✅ Sidepanel Provider Manager updated to: ${provider}`);
+    } catch (error) {
+      console.error('Error updating sidepanel provider manager:', error);
+    }
+  }
+  
+  // Also update background provider manager via message
+  try {
+    chrome.runtime.sendMessage({
+      action: 'setProvider',
+      provider: provider
+    });
+  } catch (error) {
+    console.warn('Could not update background provider:', error);
+  }
+  
+  // Update UI
+  updateProviderSelection(provider);
+  
+  console.log(`✅ Provider switched to: ${provider}`);
+}
+
+// Update provider selection UI
+function updateProviderSelection(provider) {
+  // Update selected class
+  document.getElementById('builtinProvider')?.classList.toggle('selected', provider === 'builtin');
+  document.getElementById('cloudProvider')?.classList.toggle('selected', provider === 'cloud');
+}
+
+// Update provider status indicators
+async function updateProviderStatus() {
+  console.log('🔄 Updating provider status...');
+  
+  // Check Built-in AI availability
+  const builtinStatus = document.getElementById('builtinStatusInline');
+  if (builtinStatus) {
+    try {
+      if ('LanguageModel' in self) {
+        const availability = await self.LanguageModel.availability({ outputLanguage: 'en' });
+        console.log('📊 Built-in AI availability:', availability);
+        
+        if (availability === 'readily' || availability === 'available') {
+          builtinStatus.textContent = '✅ Ready';
+          builtinStatus.className = 'provider-status-inline available';
+        } else if (availability === 'after-download' || availability === 'downloadable') {
+          builtinStatus.textContent = '📥 Downloadable';
+          builtinStatus.className = 'provider-status-inline available';
+        } else if (availability === 'downloading') {
+          builtinStatus.textContent = '⏳ Downloading...';
+          builtinStatus.className = 'provider-status-inline';
+        } else {
+          builtinStatus.textContent = '❌ Unavailable';
+          builtinStatus.className = 'provider-status-inline unavailable';
+        }
+      } else {
+        builtinStatus.textContent = '❌ Not supported';
+        builtinStatus.className = 'provider-status-inline unavailable';
+      }
+    } catch (error) {
+      builtinStatus.textContent = '❌ Check failed';
+      builtinStatus.className = 'provider-status-inline unavailable';
+      console.error('Error checking Built-in AI:', error);
+    }
+  } else {
+    console.warn('⚠️ builtinStatusInline element not found');
+  }
+  
+  // Check Cloud API availability
+  const cloudStatus = document.getElementById('cloudStatusInline');
+  if (cloudStatus) {
+    const result = await chrome.storage.local.get(['geminiApiKey']);
+    const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
+    console.log('📊 Cloud API key configured:', hasApiKey);
+    
+    if (hasApiKey) {
+      cloudStatus.textContent = '✅ Configured';
+      cloudStatus.className = 'provider-status-inline available';
+    } else {
+      cloudStatus.textContent = '⚠️ API key required';
+      cloudStatus.className = 'provider-status-inline unavailable';
+    }
+  } else {
+    console.warn('⚠️ cloudStatusInline element not found');
+  }
+  
+  console.log('✅ Provider status updated');
+  
+  // Update dashboard if present
+  await updateProviderDashboard();
+}
+
+// Update provider status dashboard
+async function updateProviderDashboard() {
+  try {
+    // Update Built-in AI dashboard
+    await updateBuiltinAIDashboard();
+    
+    // Update Cloud API dashboard
+    await updateCloudAPIDashboard();
+    
+    console.log('✅ Provider dashboard updated');
+  } catch (error) {
+    console.error('❌ Error updating provider dashboard:', error);
+  }
+}
+
+// Update Built-in AI dashboard status
+async function updateBuiltinAIDashboard() {
+  const apis = [
+    { name: 'Proofreader', id: 'builtinProofreaderStatus', check: 'LanguageModel' },
+    { name: 'Translator', id: 'builtinTranslatorStatus', check: 'Translator' },
+    { name: 'Summarizer', id: 'builtinSummarizerStatus', check: 'Summarizer' },
+    { name: 'Rewriter', id: 'builtinRewriterStatus', check: 'Rewriter' },
+    { name: 'Writer', id: 'builtinWriterStatus', check: 'Writer' },
+    { name: 'Prompt', id: 'builtinPromptStatus', check: 'LanguageModel' }
+  ];
+  
+  let availableCount = 0;
+  
+  for (const api of apis) {
+    const element = document.getElementById(api.id);
+    if (!element) continue;
+    
+    try {
+      // Check if the API exists in global scope
+      if (api.check in self) {
+        let availability;
+        
+        // Translator API requires language parameters
+        if (api.check === 'Translator') {
+          availability = await self.Translator.availability({
+            sourceLanguage: 'en',
+            targetLanguage: 'es'
+          });
+        } else {
+          availability = await self[api.check].availability();
+        }
+        
+        if (availability === 'readily' || availability === 'available') {
+          element.innerHTML = '<span class="status-value available">✅ Available</span>';
+          availableCount++;
+        } else if (availability === 'after-download' || availability === 'downloadable') {
+          element.innerHTML = '<span class="status-value downloading">📥 Downloadable</span>';
+        } else if (availability === 'downloading') {
+          element.innerHTML = '<span class="status-value downloading">⏳ Downloading</span>';
+        } else {
+          element.innerHTML = '<span class="status-value unavailable">❌ Unavailable</span>';
+        }
+      } else {
+        element.innerHTML = '<span class="status-value unavailable">❌ Not supported</span>';
+      }
+    } catch (error) {
+      console.error(`Error checking ${api.name}:`, error);
+      element.innerHTML = '<span class="status-value unavailable">❌ Check failed</span>';
+    }
+  }
+  
+  // Update overall status
+  const overallStatus = document.getElementById('builtinOverallStatus');
+  if (overallStatus) {
+    if (availableCount === apis.length) {
+      overallStatus.innerHTML = '<span class="status-value available">✅ All APIs Available</span>';
+    } else if (availableCount > 0) {
+      overallStatus.innerHTML = `<span class="status-value available">✅ ${availableCount}/${apis.length} APIs Available</span>`;
+    } else {
+      overallStatus.innerHTML = '<span class="status-value unavailable">❌ No APIs Available</span>';
+    }
+  }
+}
+
+// Update Cloud API dashboard status
+async function updateCloudAPIDashboard() {
+  const apiKeyStatus = document.getElementById('cloudApiKeyStatus');
+  const connectionStatus = document.getElementById('cloudConnectionStatus');
+  
+  if (apiKeyStatus) {
+    const result = await chrome.storage.local.get(['geminiApiKey']);
+    const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
+    
+    if (hasApiKey) {
+      apiKeyStatus.innerHTML = '<span class="status-value available">✅ Configured</span>';
+    } else {
+      apiKeyStatus.innerHTML = '<span class="status-value unavailable">❌ Not configured</span>';
+    }
+  }
+  
+  if (connectionStatus) {
+    const result = await chrome.storage.local.get(['geminiApiKey']);
+    const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
+    
+    if (hasApiKey) {
+      connectionStatus.innerHTML = '<span class="status-value available">✅ Ready</span>';
+    } else {
+      connectionStatus.innerHTML = '<span class="status-value unavailable">⚠️ API key required</span>';
+    }
+  }
+}
+
 // Save API Key
 function saveApiKey() {
   const key = document.getElementById('apiKey').value.trim();
@@ -295,6 +628,7 @@ function saveApiKey() {
   chrome.storage.local.set({ geminiApiKey: key }, () => {
     apiKey = key;
     checkApiStatus();
+    updateProviderStatus(); // Update provider status after saving key
     alert('API Key saved successfully!');
   });
 }
@@ -531,19 +865,40 @@ function displayCurrentTask() {
   taskDisplay.innerHTML = `<p>${taskDescriptions[currentTask.task] || 'Processing task...'}</p>`;
 }
 
-// Generate content using Gemini API
+// Generate content using AI Provider Manager
 async function generateContent(task) {
-  if (!apiKey) {
-    showResult('⚠️ Please configure your Gemini API key first!', 'error');
-    return;
-  }
-
   showLoading(true);
   document.getElementById('actionButtons').style.display = 'none';
 
   try {
-    const prompt = await buildPrompt(task);
-    const result = await callGeminiApi(prompt);
+    const manager = await initializeSidePanelProviderManager();
+    const activeProvider = manager.getActiveProvider();
+    let result;
+
+    // Use dedicated Built-in AI methods when available
+    if (task.task === 'summarize' && activeProvider === 'builtin') {
+      try {
+        console.log('📄 Using Built-in AI Summarizer API');
+        const response = await manager.summarizeContent(task.content, {
+          type: 'key-points',
+          format: 'markdown',
+          length: 'short'
+        });
+        result = response.data;
+        console.log('✅ Summarized using Built-in AI Summarizer API');
+      } catch (error) {
+        console.warn('⚠️ Built-in Summarizer failed, falling back to prompt-based:', error);
+        // Fallback to prompt-based summarization
+        const prompt = await buildPrompt(task);
+        const response = await manager.generateContent(prompt);
+        result = response.data;
+      }
+    } else {
+      // For other tasks or Cloud AI, use prompt-based approach
+      const prompt = await buildPrompt(task);
+      result = await callGeminiApi(prompt);
+    }
+
     showResult(result, 'success');
     saveToHistory(task, result);
     document.getElementById('actionButtons').style.display = 'flex';
@@ -587,8 +942,30 @@ ${task.content}`,
   return prompts[task.task] || task.content;
 }
 
-// Call Gemini API
+// Call AI Provider Manager (replaces direct Gemini API calls)
 async function callGeminiApi(prompt, imageParts = null) {
+  try {
+    // Get provider manager
+    const manager = await initializeSidePanelProviderManager();
+    
+    console.log('📤 Calling AI Provider Manager with prompt length:', prompt.length);
+    
+    // If there are image parts, this is a multimodal request
+    // For now, we'll use generateContent which will route to the appropriate provider
+    // The Cloud provider will handle image parts, Built-in AI will use text only
+    const response = await manager.generateContent(prompt);
+    
+    console.log('✅ Response received from', response.provider);
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ AI Provider error:', error);
+    throw error;
+  }
+}
+
+// Legacy function kept for compatibility - now uses provider manager
+async function callGeminiApiLegacy(prompt, imageParts = null) {
   // Use latest lite model
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent?key=${apiKey}`;
 
@@ -600,7 +977,7 @@ async function callGeminiApi(prompt, imageParts = null) {
     parts = [{ text: prompt }];
   }
 
-  console.log('📤 Calling Gemini API with prompt length:', prompt.length);
+  console.log('📤 Calling Gemini API (legacy) with prompt length:', prompt.length);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -1834,14 +2211,6 @@ async function clearChat() {
 
 // Translate and replace selected text
 async function translateAndReplace(content, tabId, htmlContent) {
-  if (!apiKey) {
-    chrome.tabs.sendMessage(tabId, {
-      action: 'replaceSelection',
-      translatedText: 'Error: Please configure your API key first in Settings.'
-    });
-    return;
-  }
-
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
@@ -1850,14 +2219,45 @@ async function translateAndReplace(content, tabId, htmlContent) {
     const contentToTranslate = htmlContent || content;
     const isHTML = !!htmlContent && htmlContent.includes('<');
 
-    let prompt;
-    if (isHTML) {
-      prompt = `Translate the following HTML content to ${langName}. Preserve all HTML tags (<br>, <p>, <div>, etc.) exactly as they are. Only translate the text content inside the tags. Return valid HTML:\n\n${contentToTranslate}`;
-    } else {
-      prompt = `Translate the following text to ${langName}. Preserve all line breaks and paragraph structure. Only return the translated text:\n\n${contentToTranslate}`;
-    }
+    // Get AI Provider Manager
+    const manager = await initializeSidePanelProviderManager();
+    
+    // Check which provider is active
+    const activeProvider = manager.getActiveProvider();
+    let translatedText;
 
-    const translatedText = await callGeminiApi(prompt);
+    // If Built-in AI and Translator API is available, use it directly
+    if (activeProvider === 'builtin') {
+      try {
+        // Detect source language (assume English for now, could use Language Detector API)
+        const sourceLang = 'en';
+        
+        // Use Built-in Translator API for direct translation
+        const response = await manager.translateText(contentToTranslate, sourceLang, targetLang);
+        translatedText = response.data;
+        
+        console.log(`✅ Translated using Built-in AI Translator API (${sourceLang} → ${targetLang})`);
+      } catch (error) {
+        console.warn('⚠️ Built-in Translator failed, falling back to prompt-based translation:', error);
+        // Fallback to prompt-based translation
+        const prompt = isHTML
+          ? `Translate the following HTML content to ${langName}. Preserve all HTML tags exactly. Only translate text content:\n\n${contentToTranslate}`
+          : `Translate the following text to ${langName}. Preserve formatting:\n\n${contentToTranslate}`;
+        
+        const response = await manager.generateContent(prompt);
+        translatedText = response.data;
+      }
+    } else {
+      // Cloud AI: use prompt-based translation
+      const prompt = isHTML
+        ? `Translate the following HTML content to ${langName}. Preserve all HTML tags (<br>, <p>, <div>, etc.) exactly as they are. Only translate the text content inside the tags. Return valid HTML:\n\n${contentToTranslate}`
+        : `Translate the following text to ${langName}. Preserve all line breaks and paragraph structure. Only return the translated text:\n\n${contentToTranslate}`;
+      
+      const response = await manager.generateContent(prompt);
+      translatedText = response.data;
+      
+      console.log(`✅ Translated using Cloud AI (${activeProvider})`);
+    }
 
     // Send translated text to content script to replace selection
     chrome.tabs.sendMessage(tabId, {
@@ -1876,14 +2276,6 @@ async function translateAndReplace(content, tabId, htmlContent) {
 
 // Translate page in-place (replace all text nodes)
 async function translatePageInPlace(content, tabId) {
-  if (!apiKey) {
-    chrome.tabs.sendMessage(tabId, {
-      action: 'replacePageText',
-      translations: '[0]Error: Please configure your API key first in Settings.'
-    });
-    return;
-  }
-
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
@@ -1891,6 +2283,14 @@ async function translatePageInPlace(content, tabId) {
     console.log('Translating page to:', langName);
     console.log('Content length:', content.length);
 
+    // Get AI Provider Manager
+    const manager = await initializeSidePanelProviderManager();
+    const activeProvider = manager.getActiveProvider();
+    
+    let translatedText;
+
+    // For page translation, we need to use prompt-based approach for both providers
+    // because we need to preserve the [index] markers for text node replacement
     const prompt = `Translate the following indexed text to ${langName}. Each line starts with [index] followed by text. You must:
 1. Keep the [index] markers exactly as they are
 2. Translate only the text after each [index]
@@ -1901,7 +2301,10 @@ async function translatePageInPlace(content, tabId) {
 Text to translate:
 ${content}`;
 
-    const translatedText = await callGeminiApi(prompt);
+    const response = await manager.generateContent(prompt);
+    translatedText = response.data;
+    
+    console.log(`✅ Page translated using ${activeProvider === 'builtin' ? 'Built-in AI' : 'Cloud AI'}`)
     console.log('Translation received, length:', translatedText.length);
 
     // Send translated text to content script to replace all text nodes
@@ -1921,21 +2324,42 @@ ${content}`;
 
 // Translate and inject into page (old overlay method - kept for compatibility)
 async function translateAndInject(content, tabId) {
-  if (!apiKey) {
-    chrome.tabs.sendMessage(tabId, {
-      action: 'injectTranslation',
-      translatedText: 'Error: Please configure your API key first in Settings.'
-    });
-    return;
-  }
-
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
 
-    const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
+    // Get AI Provider Manager
+    const manager = await initializeSidePanelProviderManager();
+    const activeProvider = manager.getActiveProvider();
+    
+    let translatedText;
 
-    const translatedText = await callGeminiApi(prompt);
+    // If Built-in AI and Translator API is available, use it directly
+    if (activeProvider === 'builtin') {
+      try {
+        // Detect source language (assume English for now)
+        const sourceLang = 'en';
+        
+        // Use Built-in Translator API
+        const response = await manager.translateText(content, sourceLang, targetLang);
+        translatedText = response.data;
+        
+        console.log(`✅ Translated using Built-in AI Translator API`);
+      } catch (error) {
+        console.warn('⚠️ Built-in Translator failed, falling back to prompt-based:', error);
+        // Fallback to prompt-based
+        const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
+        const response = await manager.generateContent(prompt);
+        translatedText = response.data;
+      }
+    } else {
+      // Cloud AI: use prompt-based translation
+      const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
+      const response = await manager.generateContent(prompt);
+      translatedText = response.data;
+      
+      console.log(`✅ Translated using Cloud AI`);
+    }
 
     // Send translated text to content script to inject
     chrome.tabs.sendMessage(tabId, {

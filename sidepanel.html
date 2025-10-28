@@ -187,13 +187,155 @@
 
     <!-- Settings Tab -->
     <div class="tab-content" id="settingsTab">
+      <!-- AI Provider Selection -->
       <div class="section">
-        <h2>🔑 API Key</h2>
+        <h2>🤖 AI Provider</h2>
+        <div class="provider-selector">
+          <div class="provider-option" id="builtinProvider">
+            <div class="provider-header">
+              <div class="provider-radio-wrapper">
+                <input type="radio" name="aiProvider" value="builtin" id="builtinRadio">
+              </div>
+              <div class="provider-title-wrapper">
+                <label for="builtinRadio" class="provider-title">
+                  <div class="provider-name-row">
+                    <span class="provider-name">Built-in AI</span>
+                    <span class="provider-model">(Gemini Nano)</span>
+                  </div>
+                  <span class="provider-status-inline" id="builtinStatusInline">⏳ Checking...</span>
+                </label>
+              </div>
+            </div>
+            <div class="provider-benefits">
+              <div class="benefit">✅ Free - No API costs</div>
+              <div class="benefit">🔒 Private - Runs locally</div>
+              <div class="benefit">⚡ Fast - No network latency</div>
+              <div class="benefit">📴 Offline - Works without internet</div>
+            </div>
+          </div>
+
+          <div class="provider-option" id="cloudProvider">
+            <div class="provider-header">
+              <div class="provider-radio-wrapper">
+                <input type="radio" name="aiProvider" value="cloud" id="cloudRadio">
+              </div>
+              <div class="provider-title-wrapper">
+                <label for="cloudRadio" class="provider-title">
+                  <div class="provider-name-row">
+                    <span class="provider-name">Cloud API</span>
+                    <span class="provider-model">(Gemini)</span>
+                  </div>
+                  <span class="provider-status-inline" id="cloudStatusInline">⏳ Checking...</span>
+                </label>
+              </div>
+            </div>
+            <div class="provider-benefits">
+              <div class="benefit">🌐 Always available with API key</div>
+              <div class="benefit">🚀 Latest models and features</div>
+              <div class="benefit">📊 Higher token limits</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="provider-info">
+          <p><strong>💡 How it works:</strong></p>
+          <ul>
+            <li>Built-in AI is prioritized when available</li>
+            <li>Automatically falls back to Cloud API if needed</li>
+            <li>You can manually switch providers anytime</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Provider Status Dashboard -->
+      <div class="section">
+        <h2>📊 Provider Status Dashboard</h2>
+        <div class="provider-dashboard">
+          <div class="dashboard-card" id="builtinDashboard">
+            <div class="dashboard-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="dashboard-icon">⚡</span>
+                <h3>Built-in AI Status</h3>
+              </div>
+              <button id="openTestPageBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" title="Open Built-in AI Test Suite">
+                🧪 Test APIs
+              </button>
+            </div>
+            <div class="dashboard-content">
+              <div class="status-row">
+                <span class="status-label">Overall Status:</span>
+                <span class="status-value" id="builtinOverallStatus">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Proofreader API:</span>
+                <span class="status-value" id="builtinProofreaderStatus">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Translator API:</span>
+                <span class="status-value" id="builtinTranslatorStatus">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Summarizer API:</span>
+                <span class="status-value" id="builtinSummarizerStatus">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Rewriter API:</span>
+                <span class="status-value" id="builtinRewriterStatus">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Writer API:</span>
+                <span class="status-value" id="builtinWriterStatus">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Prompt API:</span>
+                <span class="status-value" id="builtinPromptStatus">Checking...</span>
+              </div>
+              <div class="download-status" id="builtinDownloadStatus" style="display: none;">
+                <div class="download-progress-bar">
+                  <div class="download-progress-fill" id="builtinDownloadProgress"></div>
+                </div>
+                <span class="download-text" id="builtinDownloadText">Downloading model...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-card" id="cloudDashboard">
+            <div class="dashboard-header">
+              <span class="dashboard-icon">☁️</span>
+              <h3>Cloud API Status</h3>
+            </div>
+            <div class="dashboard-content">
+              <div class="status-row">
+                <span class="status-label">API Key:</span>
+                <span class="status-value" id="cloudApiKeyStatus">Not configured</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Connection:</span>
+                <span class="status-value" id="cloudConnectionStatus">Not tested</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">Supported Features:</span>
+                <span class="status-value">All features</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-actions">
+            <button id="refreshProviderStatus" class="btn btn-secondary">🔄 Refresh Status</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🔑 Cloud API Key</h2>
         <div class="input-group">
-          <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
+          <input type="password" id="apiKey" placeholder="Enter your Gemini API key (for Cloud API)">
           <button id="saveApiKey" class="btn btn-primary">Save</button>
           <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link">Get API Key</a>
         </div>
+        <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">
+          💡 API key is only needed for Cloud API fallback
+        </p>
       </div>
 
       <div class="section">
@@ -297,6 +439,12 @@
     </div>
   </div>
 
+  <!-- AI Provider Manager and Providers -->
+  <script src="ai-provider-manager.js"></script>
+  <script src="builtin-ai-provider.js"></script>
+  <script src="cloud-ai-provider.js"></script>
+  <script src="provider-status-ui.js"></script>
+  
   <script src="sidepanel.js"></script>
 </body>
 </html>

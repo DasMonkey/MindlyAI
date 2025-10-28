@@ -1,6 +1,44 @@
 // Background service worker
+
+// Import AI Provider Manager and Providers
+importScripts('ai-provider-manager.js', 'builtin-ai-provider.js', 'cloud-ai-provider.js');
+
+// Initialize AI Provider Manager
+let providerManager = null;
+
+async function initializeProviderManager() {
+  if (providerManager) return providerManager;
+  
+  try {
+    // Create provider instances
+    const builtinProvider = new BuiltInAIProvider();
+    const cloudProvider = new CloudAIProvider();
+    
+    // Initialize providers
+    await builtinProvider.initialize();
+    await cloudProvider.initialize();
+    
+    // Create and initialize manager
+    providerManager = new AIProviderManager();
+    await providerManager.initialize();
+    
+    // Register providers
+    providerManager.registerProvider('builtin', builtinProvider);
+    providerManager.registerProvider('cloud', cloudProvider);
+    
+    console.log('✅ AI Provider Manager initialized in background');
+    return providerManager;
+  } catch (error) {
+    console.error('❌ Error initializing provider manager:', error);
+    throw error;
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('AI Content Assistant installed');
+  
+  // Initialize provider manager
+  initializeProviderManager().catch(console.error);
   
   // Create context menu items
   chrome.contextMenus.create({
@@ -88,6 +126,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return false;
     }
 
+    case 'setProvider': {
+      // Handle provider selection change
+      console.log('📍 Background: Setting provider to:', request.provider);
+      initializeProviderManager()
+        .then(async (manager) => {
+          await manager.setProvider(request.provider);
+          console.log('✅ Background: Provider updated to:', request.provider);
+          if (sendResponse) {
+            sendResponse({ success: true });
+          }
+        })
+        .catch(error => {
+          console.error('❌ Background: Error setting provider:', error);
+          if (sendResponse) {
+            sendResponse({ error: error.message });
+          }
+        });
+      return true; // Keep message channel open for async response
+    }
+
     case 'grammarCheck': {
       // Handle grammar check with mini-flash-lite model
       console.log('?? Background: Handling grammar check request');
@@ -172,6 +230,86 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true; // Async response
     }
 
+    case 'getProviderStatus': {
+      // Handle provider status requests
+      console.log('📊 Background: Getting provider status');
+      initializeProviderManager()
+        .then(manager => manager.getProviderStatus())
+        .then(status => {
+          console.log('✅ Background: Provider status retrieved');
+          sendResponse({ success: true, status });
+        })
+        .catch(error => {
+          console.error('❌ Background: Error getting provider status:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Async response
+    }
+
+    case 'setProvider': {
+      // Handle provider switching
+      console.log('🔄 Background: Switching provider to', request.provider);
+      initializeProviderManager()
+        .then(manager => manager.setProvider(request.provider))
+        .then(result => {
+          console.log('✅ Background: Provider switched successfully');
+          sendResponse({ success: true, provider: result.provider });
+        })
+        .catch(error => {
+          console.error('❌ Background: Error switching provider:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Async response
+    }
+
+    case 'updateSettings': {
+      // Handle settings updates
+      console.log('⚙️ Background: Updating settings');
+      initializeProviderManager()
+        .then(manager => manager.saveSettings(request.settings))
+        .then(() => {
+          console.log('✅ Background: Settings updated successfully');
+          sendResponse({ success: true });
+        })
+        .catch(error => {
+          console.error('❌ Background: Error updating settings:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Async response
+    }
+
+    case 'getSettings': {
+      // Handle settings retrieval
+      console.log('⚙️ Background: Getting settings');
+      initializeProviderManager()
+        .then(manager => {
+          const settings = manager.getSettings();
+          console.log('✅ Background: Settings retrieved');
+          sendResponse({ success: true, settings });
+        })
+        .catch(error => {
+          console.error('❌ Background: Error getting settings:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Async response
+    }
+
+    case 'getAPIStatus': {
+      // Handle API status requests
+      console.log('📊 Background: Getting API status');
+      initializeProviderManager()
+        .then(manager => manager.getAPIStatus())
+        .then(status => {
+          console.log('✅ Background: API status retrieved');
+          sendResponse({ success: true, status });
+        })
+        .catch(error => {
+          console.error('❌ Background: Error getting API status:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Async response
+    }
+
     default:
       return false;
   }
@@ -210,102 +348,48 @@ function forwardToSidePanel(message, sender) {
   attemptForward();
 }
 
-// Handle grammar check requests with mini-flash-lite model
+// Handle grammar check requests using AI Provider Manager
 async function handleGrammarCheck(prompt) {
-  // Get API key from storage
-  const data = await chrome.storage.local.get(['geminiApiKey']);
-  const apiKey = data.geminiApiKey;
-  
-  if (!apiKey) {
-    throw new Error('API key not configured');
+  try {
+    // Ensure provider manager is initialized
+    const manager = await initializeProviderManager();
+    
+    console.log('📤 Background: Checking grammar using AI Provider Manager');
+    
+    // Use provider manager to check grammar
+    // The manager will automatically route to the appropriate provider
+    const response = await manager.checkGrammar(prompt);
+    
+    console.log('✅ Background: Grammar check completed via', response.provider);
+    
+    // Return the data (unwrap from normalized response)
+    return response.data;
+  } catch (error) {
+    console.error('❌ Grammar check error:', error);
+    throw error;
   }
-  
-  console.log('?? Background: Calling Gemini API (gemini-flash-lite-latest)');
-  
-  // Use gemini-flash-lite-latest for fast grammar checking
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        temperature: 0.3,  // Lower temperature for more consistent grammar checks
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 1024  // Smaller output for faster response
-      }
-    })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    console.error('? API Error Response:', error);
-    throw new Error(error.error?.message || `API request failed: ${response.status}`);
-  }
-  
-  const data2 = await response.json();
-  console.log('? Background: API response received');
-  
-  if (!data2.candidates || !data2.candidates[0] || !data2.candidates[0].content) {
-    throw new Error('API returned unexpected response format');
-  }
-  
-  return data2.candidates[0].content.parts[0].text;
 }
 
-// Handle text assist requests in background
+// Handle text assist requests using AI Provider Manager
 async function handleTextAssist(prompt) {
-  // Get API key from storage
-  const data = await chrome.storage.local.get(['geminiApiKey']);
-  const apiKey = data.geminiApiKey;
-  
-  if (!apiKey) {
-    throw new Error('API key not configured');
+  try {
+    // Ensure provider manager is initialized
+    const manager = await initializeProviderManager();
+    
+    console.log('📤 Background: Processing text assist using AI Provider Manager');
+    
+    // Use provider manager to generate content
+    // The manager will automatically route to the appropriate provider
+    const response = await manager.generateContent(prompt);
+    
+    console.log('✅ Background: Text assist completed via', response.provider);
+    
+    // Return the data (unwrap from normalized response)
+    return response.data;
+  } catch (error) {
+    console.error('❌ Text assist error:', error);
+    throw error;
   }
-  
-  console.log('?? Background: Calling Gemini API');
-  
-  // Call Gemini API directly
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 2048
-      }
-    })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    console.error('? API Error Response:', error);
-    throw new Error(error.error?.message || `API request failed: ${response.status}`);
-  }
-  
-  const data2 = await response.json();
-  console.log('? Background: API response received');
-  
-  if (!data2.candidates || !data2.candidates[0] || !data2.candidates[0].content) {
-    throw new Error('API returned unexpected response format');
-  }
-  
-  return data2.candidates[0].content.parts[0].text;
 }
 
 // Allow side panel to open on action click

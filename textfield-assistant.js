@@ -6,13 +6,24 @@ class TextFieldAssistant {
     this.observer = null;
     this.activeToolbar = null;
     this.selectionPopup = null;
+    this.providerStatusUI = null; // Provider status UI instance
   }
 
-  init() {
+  async init() {
     console.log('🎯 Text Field Assistant initialized');
     this.detectExistingFields();
     this.observeNewFields();
     this.setupGlobalListeners();
+    
+    // Initialize provider status UI if available
+    if (typeof ProviderStatusUI !== 'undefined') {
+      try {
+        this.providerStatusUI = new ProviderStatusUI();
+        console.log('✅ Provider Status UI ready for text field assistant');
+      } catch (error) {
+        console.warn('⚠️ Provider Status UI not available:', error);
+      }
+    }
   }
 
   detectExistingFields() {

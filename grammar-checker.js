@@ -7,12 +7,25 @@ class GrammarChecker {
     this.debounceTimers = new WeakMap();
     this.isHoveringPopup = false;
     this.ignoredErrors = new Set(); // Track ignored errors (error text)
+    this.providerStatusUI = null; // Provider status UI instance
+    this.providerBadge = null; // Provider badge element
   }
 
-  init() {
+  async init() {
     console.log('🔍 Grammar Checker initialized');
     this.detectExistingFields();
     this.observeNewFields();
+    
+    // Initialize provider status UI if available
+    if (typeof ProviderStatusUI !== 'undefined') {
+      try {
+        this.providerStatusUI = new ProviderStatusUI();
+        // Provider manager will be initialized by background.js
+        console.log('✅ Provider Status UI ready for grammar checker');
+      } catch (error) {
+        console.warn('⚠️ Provider Status UI not available:', error);
+      }
+    }
   }
 
   detectExistingFields() {
