@@ -3,6 +3,9 @@
   "name": "Mentelo",
   "version": "1.0.0",
   "description": "Hybrid AI content assistant powered by Chrome Built-in AI (Gemini Nano) with Cloud API fallback. Features: grammar checking, translation, summarization, content generation - all with privacy-first, offline-capable AI.",
+  "trial_tokens": [
+    "AnOF81ySJZPCHXsshQFYY/VchjDK9kEzG1eLF6jFrL4AG/Iy9Bko+H+K9Qt/Ry0/3sOB3xPU9ALWJCqhwVQyFg8AAABxeyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vY2RjY2RqYWJna2Zvb3BnYmJhY29kaGxmbGViZGhkamoiLCJmZWF0dXJlIjoiQUlQcm9vZnJlYWRlckFQSSIsImV4cGlyeSI6MTc3OTE0ODgwMH0="
+  ],
   "permissions": [
     "activeTab",
     "storage",

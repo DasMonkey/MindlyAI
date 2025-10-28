@@ -91,45 +91,17 @@ class GrammarChecker {
   }
 
   async checkText(text) {
+    console.log('🔍 Grammar check requested for text:', text.substring(0, 50) + '...');
+    
     // Check cache first
     const cacheKey = text.trim().toLowerCase();
     if (this.checkCache.has(cacheKey)) {
+      console.log('📦 Using cached result');
       return this.checkCache.get(cacheKey);
     }
 
-    const prompt = `You are an expert grammar and spelling checker. Your task is to analyze the user's text below and identify only genuine errors.
-
-ANALYZE THIS TEXT:
-"""
-${text}
-"""
-
-Return a JSON array with any errors found:
-[{"error": "the wrong text", "correction": "the correct text", "type": "grammar" or "spelling", "message": "brief explanation"}]
-
-EXPERT GUIDELINES:
-- Read the COMPLETE text with full context before identifying errors
-- "I was" is CORRECT (singular first person past tense)
-- "I were" is ONLY correct in subjunctive mood (e.g., "If I were rich")
-- "He/She/It was" is CORRECT (singular third person)
-- Only flag actual errors where the correction is DIFFERENT from the original
-- Consider complete sentences and phrases, not isolated words
-- Return empty array [] if no errors exist
-- Return ONLY valid JSON, no markdown or explanations
-
-CORRECT EXAMPLES:
-- "I was thinking" ✓ (correct - singular first person)
-- "He was going" ✓ (correct - singular third person)
-- "They were going" ✓ (correct - plural)
-- "because she left" ✓ (correct - complete word)
-
-ERROR EXAMPLES:
-- "He dont like" → [{"error": "dont", "correction": "doesn't", "type": "spelling", "message": "Missing apostrophe"}]
-- "I were happy" → [{"error": "were", "correction": "was", "type": "grammar", "message": "Use 'was' with singular 'I'"}]
-
-JSON response:`;
-
     try {
+      console.log('📤 Sending grammar check request to background');
       const response = await new Promise((resolve, reject) => {
         // Check if extension context is still valid before sending message
         if (!chrome.runtime?.id) {
@@ -138,9 +110,11 @@ JSON response:`;
         }
 
         try {
+          // Send plain text to use Proofreader API when available
+          // The backend will automatically choose between Proofreader API and Prompt API
           chrome.runtime.sendMessage({
             action: 'grammarCheck',
-            prompt: prompt
+            text: text  // Send plain text instead of prompt
           }, (response) => {
             if (chrome.runtime.lastError) {
               reject(new Error(chrome.runtime.lastError.message));
@@ -154,63 +128,45 @@ JSON response:`;
       });
 
       if (response?.result) {
+        console.log('📥 Received grammar check response:', response);
         let errors = [];
-        try {
-          let responseText = response.result.trim();
-
-          // Remove markdown code blocks
-          responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-
-          // METHOD 1: Try standard JSON parse first
+        
+        // The result is already in the correct format from builtin-ai-provider.js
+        // It's an array of error objects: [{error, correction, type, message, startIndex, endIndex}]
+        if (Array.isArray(response.result)) {
+          console.log('✅ Result is already an array:', response.result);
+          errors = response.result;
+        } else {
+          // Fallback: try to parse as JSON (for backward compatibility with Prompt API)
           try {
+            let responseText = response.result.trim();
+
+            // Remove markdown code blocks
+            responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+            // Try standard JSON parse
             const parsed = JSON.parse(responseText);
             if (Array.isArray(parsed)) {
               errors = parsed;
             }
-          } catch (jsonError) {
-            // METHOD 2: Extract individual error objects using regex - BULLETPROOF
-            // This handles incomplete JSON by extracting only what's parseable
-            const errorPattern = /\{\s*"error"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*,\s*"correction"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*,\s*"type"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*,\s*"message"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*\}/g;
-
-            let match;
-            while ((match = errorPattern.exec(responseText)) !== null) {
-              errors.push({
-                error: match[1],
-                correction: match[2],
-                type: match[3],
-                message: match[4]
-              });
-            }
-
-            // If regex didn't find complete objects, try simpler pattern
-            if (errors.length === 0) {
-              const simplePattern = /"error"\s*:\s*"([^"]*)"\s*,\s*"correction"\s*:\s*"([^"]*)"/g;
-              while ((match = simplePattern.exec(responseText)) !== null) {
-                errors.push({
-                  error: match[1],
-                  correction: match[2],
-                  type: 'grammar',
-                  message: ''
-                });
-              }
-            }
-          }
-
-          // Validate and filter
-          if (!Array.isArray(errors)) {
+          } catch (e) {
+            console.error('Grammar check parsing failed:', e);
             errors = [];
           }
+        }
 
-          errors = errors.filter(err =>
-            err.error &&
-            err.correction &&
-            err.error.toLowerCase().trim() !== err.correction.toLowerCase().trim()
-          );
-
-        } catch (e) {
-          console.error('Grammar check parsing completely failed:', e);
+        // Validate and filter
+        if (!Array.isArray(errors)) {
           errors = [];
         }
+
+        errors = errors.filter(err =>
+          err.error &&
+          err.correction &&
+          err.error.toLowerCase().trim() !== err.correction.toLowerCase().trim()
+        );
+
+        console.log('🔍 Filtered errors:', errors.length, 'errors found');
 
         // Filter out ignored errors
         errors = errors.filter(err => !this.ignoredErrors.has(err.error));
@@ -224,6 +180,7 @@ JSON response:`;
           this.checkCache.delete(firstKey);
         }
 
+        console.log('✅ Returning', errors.length, 'errors:', errors);
         return errors;
       }
     } catch (error) {
@@ -284,18 +241,26 @@ class FieldChecker {
   async checkGrammar() {
     const text = this.getFieldText();
 
+    console.log('📝 FieldChecker: Checking grammar for text:', text.substring(0, 50) + '...');
+
     if (!text || text.length < 3 || text === this.lastCheckedText) {
+      console.log('⏭️ Skipping check (too short or same as last check)');
       return;
     }
 
     this.lastCheckedText = text;
 
     // Check text with AI
+    console.log('🔍 FieldChecker: Calling checkText...');
     this.errors = await this.grammarChecker.checkText(text);
 
-    if (this.errors.length > 0) {
+    console.log('📊 FieldChecker: Received', this.errors?.length || 0, 'errors');
+
+    if (this.errors && this.errors.length > 0) {
+      console.log('🎨 FieldChecker: Showing underlines for', this.errors.length, 'errors');
       this.showUnderlines();
     } else {
+      console.log('✨ FieldChecker: No errors, removing overlay');
       this.removeOverlay();
     }
   }

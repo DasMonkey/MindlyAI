@@ -179,6 +179,11 @@ async function loadApiKey() {
       apiKey = result.geminiApiKey || null;
       if (apiKey) {
         document.getElementById('apiKey').value = apiKey;
+        // Show remove button if API key exists
+        document.getElementById('removeApiKey').style.display = 'inline-block';
+      } else {
+        // Hide remove button if no API key
+        document.getElementById('removeApiKey').style.display = 'none';
       }
       resolve();
     });
@@ -203,6 +208,9 @@ function checkApiStatus() {
 function setupEventListeners() {
   // Save API Key
   document.getElementById('saveApiKey').addEventListener('click', saveApiKey);
+  
+  // Remove API Key
+  document.getElementById('removeApiKey').addEventListener('click', removeApiKey);
 
   // Save language preference
   document.getElementById('saveLanguage').addEventListener('click', saveLanguagePreference);
@@ -309,6 +317,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return;
     }
     currentTask = request;
+    switchTab('generate'); // Switch to generate tab to show the results
     displayCurrentTask();
     generateContent(request);
   } else if (request.action === 'switchToChat') {
@@ -453,7 +462,7 @@ async function updateProviderStatus() {
   console.log('🔄 Updating provider status...');
   
   // Check Built-in AI availability
-  const builtinStatus = document.getElementById('builtinStatusInline');
+  const builtinStatus = document.getElementById('builtinStatusInline') || document.getElementById('builtinStatusCompact');
   if (builtinStatus) {
     try {
       if ('LanguageModel' in self) {
@@ -483,11 +492,11 @@ async function updateProviderStatus() {
       console.error('Error checking Built-in AI:', error);
     }
   } else {
-    console.warn('⚠️ builtinStatusInline element not found');
+    console.warn('⚠️ builtinStatusInline/builtinStatusCompact element not found');
   }
   
   // Check Cloud API availability
-  const cloudStatus = document.getElementById('cloudStatusInline');
+  const cloudStatus = document.getElementById('cloudStatusInline') || document.getElementById('cloudStatusCompact');
   if (cloudStatus) {
     const result = await chrome.storage.local.get(['geminiApiKey']);
     const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
@@ -501,7 +510,7 @@ async function updateProviderStatus() {
       cloudStatus.className = 'provider-status-inline unavailable';
     }
   } else {
-    console.warn('⚠️ cloudStatusInline element not found');
+    console.warn('⚠️ cloudStatusInline/cloudStatusCompact element not found');
   }
   
   console.log('✅ Provider status updated');
@@ -528,7 +537,7 @@ async function updateProviderDashboard() {
 // Update Built-in AI dashboard status
 async function updateBuiltinAIDashboard() {
   const apis = [
-    { name: 'Proofreader', id: 'builtinProofreaderStatus', check: 'LanguageModel' },
+    { name: 'Proofreader', id: 'builtinProofreaderStatus', check: 'Proofreader' },
     { name: 'Translator', id: 'builtinTranslatorStatus', check: 'Translator' },
     { name: 'Summarizer', id: 'builtinSummarizerStatus', check: 'Summarizer' },
     { name: 'Rewriter', id: 'builtinRewriterStatus', check: 'Rewriter' },
@@ -553,6 +562,11 @@ async function updateBuiltinAIDashboard() {
             sourceLanguage: 'en',
             targetLanguage: 'es'
           });
+        } else if (api.check === 'Proofreader') {
+          // Proofreader API requires expectedInputLanguages parameter
+          availability = await self.Proofreader.availability({
+            expectedInputLanguages: ['en']
+          });
         } else {
           availability = await self[api.check].availability();
         }
@@ -561,7 +575,11 @@ async function updateBuiltinAIDashboard() {
           element.innerHTML = '<span class="status-value available">✅ Available</span>';
           availableCount++;
         } else if (availability === 'after-download' || availability === 'downloadable') {
-          element.innerHTML = '<span class="status-value downloading">📥 Downloadable</span>';
+          element.innerHTML = '<span class="status-value downloading clickable" data-api="' + api.check + '" title="Click to download">📥 Downloadable</span>';
+          // Add click handler
+          const statusEl = element.querySelector('.status-value');
+          statusEl.style.cursor = 'pointer';
+          statusEl.addEventListener('click', () => downloadAPIModel(api.check, api.name));
         } else if (availability === 'downloading') {
           element.innerHTML = '<span class="status-value downloading">⏳ Downloading</span>';
         } else {
@@ -586,6 +604,80 @@ async function updateBuiltinAIDashboard() {
     } else {
       overallStatus.innerHTML = '<span class="status-value unavailable">❌ No APIs Available</span>';
     }
+  }
+}
+
+// Download API Model from dashboard
+async function downloadAPIModel(apiName, displayName) {
+  console.log(`📥 Starting download for ${displayName}...`);
+  
+  const statusElement = document.getElementById(`builtin${displayName}Status`);
+  if (!statusElement) return;
+  
+  // Show downloading status
+  statusElement.innerHTML = '<span class="status-value downloading">⏳ Downloading...</span>';
+  
+  try {
+    let session;
+    
+    if (apiName === 'Translator') {
+      // Translator needs language parameters
+      session = await self.Translator.create({
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        monitor(m) {
+          m.addEventListener('downloadprogress', (e) => {
+            const percent = Math.round(e.loaded * 100);
+            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
+          });
+        }
+      });
+    } else if (apiName === 'Summarizer') {
+      session = await self.Summarizer.create({
+        type: 'key-points',
+        format: 'markdown',
+        length: 'medium',
+        monitor(m) {
+          m.addEventListener('downloadprogress', (e) => {
+            const percent = Math.round(e.loaded * 100);
+            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
+          });
+        }
+      });
+    } else if (apiName === 'LanguageModel') {
+      session = await self.LanguageModel.create({
+        monitor(m) {
+          m.addEventListener('downloadprogress', (e) => {
+            const percent = Math.round(e.loaded * 100);
+            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
+          });
+        }
+      });
+    } else {
+      // Generic download for other APIs
+      session = await self[apiName].create({
+        monitor(m) {
+          m.addEventListener('downloadprogress', (e) => {
+            const percent = Math.round(e.loaded * 100);
+            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
+          });
+        }
+      });
+    }
+    
+    // Success
+    statusElement.innerHTML = '<span class="status-value available">✅ Available</span>';
+    console.log(`✅ ${displayName} downloaded successfully`);
+    
+    // Refresh the entire dashboard after a short delay
+    setTimeout(() => updateProviderDashboard(), 500);
+    
+  } catch (error) {
+    console.error(`❌ Error downloading ${displayName}:`, error);
+    statusElement.innerHTML = '<span class="status-value unavailable">❌ Download failed</span>';
+    
+    // Revert to downloadable after 2 seconds
+    setTimeout(() => updateProviderDashboard(), 2000);
   }
 }
 
@@ -629,7 +721,30 @@ function saveApiKey() {
     apiKey = key;
     checkApiStatus();
     updateProviderStatus(); // Update provider status after saving key
+    
+    // Show remove button
+    document.getElementById('removeApiKey').style.display = 'inline-block';
+    
     alert('API Key saved successfully!');
+  });
+}
+
+// Remove API Key
+function removeApiKey() {
+  if (!confirm('Are you sure you want to remove the API key?\n\nCloud AI features will not work without an API key.')) {
+    return;
+  }
+
+  chrome.storage.local.remove('geminiApiKey', () => {
+    apiKey = null;
+    document.getElementById('apiKey').value = '';
+    checkApiStatus();
+    updateProviderStatus(); // Update provider status after removing key
+    
+    // Hide remove button
+    document.getElementById('removeApiKey').style.display = 'none';
+    
+    alert('API Key removed successfully!');
   });
 }
 
@@ -858,8 +973,7 @@ function displayCurrentTask() {
     'summarize': `📄 Summarizing page: ${currentTask.title}`,
     'translate-page': `🌐 Translating page: ${currentTask.title}`,
     'translate-selection': `🔤 Translating selected text`,
-    'mindmap': `🧠 Creating mindmap for: ${currentTask.title}`,
-    'social-content': `📱 Generating social content for: ${currentTask.title}`
+    'mindmap': `🧠 Creating mindmap for: ${currentTask.title}`
   };
 
   taskDisplay.innerHTML = `<p>${taskDescriptions[currentTask.task] || 'Processing task...'}</p>`;
@@ -978,9 +1092,7 @@ ${task.content}`,
 
     'translate-selection': `Please translate the following text to ${langName}:\n\n${task.content}`,
 
-    'mindmap': `Create a visual mindmap for the following content. Format it as a centered, branching structure with a main topic in the center (use 🎯 emoji), major branches (use ⭐ emoji), and sub-branches (use • emoji). Make it visually distinct and easy to scan:\n\n${task.content}\n\nFormat example:\n\n🎯 Main Topic\n   │\n   ├─⭐ Major Branch 1\n   │   • Sub-point 1\n   │   • Sub-point 2\n   │\n   ├─⭐ Major Branch 2\n   │   • Sub-point 1\n   │\n   └─⭐ Major Branch 3\n       • Sub-point 1`,
-
-    'social-content': `Create viral social media content based on the following webpage. Generate posts for Twitter/X, LinkedIn, and Instagram. Each post should have:\n1. A catchy hook\n2. Main content with value\n3. Call to action\n4. Relevant hashtags\n\nSource content:\n${task.content}\n\nURL: ${task.url}`
+    'mindmap': `Create a visual mindmap for the following content. Format it as a centered, branching structure with a main topic in the center (use 🎯 emoji), major branches (use ⭐ emoji), and sub-branches (use • emoji). Make it visually distinct and easy to scan:\n\n${task.content}\n\nFormat example:\n\n🎯 Main Topic\n   │\n   ├─⭐ Major Branch 1\n   │   • Sub-point 1\n   │   • Sub-point 2\n   │\n   ├─⭐ Major Branch 2\n   │   • Sub-point 1\n   │\n   └─⭐ Major Branch 3\n       • Sub-point 1`
   };
 
   return prompts[task.task] || task.content;
@@ -1154,7 +1266,201 @@ async function callGeminiVisionApi(prompt, imageBase64) {
   return data.candidates[0].content.parts[0].text;
 }
 
-// Extract PDF page content using OCR
+// Get current AI provider
+function getCurrentProvider() {
+  if (sidePanelProviderManager && sidePanelProviderManager.getActiveProvider()) {
+    return sidePanelProviderManager.getActiveProvider();
+  }
+  // Default to builtin if not set
+  return 'builtin';
+}
+
+// Smart PDF extraction - chooses method based on AI provider
+async function extractPDFPage(tabId, pageNumber = null) {
+  const provider = getCurrentProvider();
+  
+  // Built-in AI: try text extraction first, fall back to OCR if needed
+  if (provider === 'builtin') {
+    try {
+      return await extractPDFPageText(tabId, pageNumber);
+    } catch (error) {
+      // If OCR fallback also failed and it's due to missing API key
+      if (error.message.includes('API key')) {
+        // Show helpful message to user
+        const userWantsOCR = confirm(
+          'This PDF requires OCR (image-based text extraction).\n\n' +
+          'Built-in AI cannot extract text from Chrome\'s native PDF viewer.\n\n' +
+          'Options:\n' +
+          '1. Switch to Cloud AI and configure API key for OCR\n' +
+          '2. Open the PDF in a different viewer (Firefox PDF.js)\n\n' +
+          'Would you like to switch to Cloud AI now?'
+        );
+        
+        if (userWantsOCR) {
+          // Switch to cloud AI
+          await switchProvider('cloud');
+          throw new Error('Please configure your API key in Settings, then try again.');
+        }
+      }
+      throw error;
+    }
+  }
+  
+  // Cloud AI: use OCR for better accuracy with images
+  return await extractPDFPageWithOCR(tabId, pageNumber);
+}
+
+// Extract PDF page text directly (for built-in AI - no OCR needed)
+async function extractPDFPageText(tabId, pageNumber = null) {
+  try {
+    console.log('📄 Extracting PDF text...');
+
+    // Hide floating popup before extraction
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        function: () => {
+          const popup = document.getElementById('ai-assistant-popup');
+          if (popup) {
+            popup.style.display = 'none';
+          }
+        }
+      });
+    } catch (e) {
+      console.log('Could not hide popup:', e);
+    }
+
+    // Get current page number from the PDF viewer if not provided
+    if (!pageNumber) {
+      try {
+        const pageResults = await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          function: () => {
+            // Try PDF.js viewer
+            if (window.PDFViewerApplication && window.PDFViewerApplication.pdfViewer) {
+              const pageNum = window.PDFViewerApplication.pdfViewer.currentPageNumber;
+              return { page: pageNum, method: 'pdfjs' };
+            }
+            return { page: 1, method: 'default' };
+          }
+        });
+        pageNumber = pageResults[0]?.result?.page || 1;
+      } catch (e) {
+        console.log('Could not detect page number, defaulting to page 1:', e.message);
+        pageNumber = 1;
+      }
+    }
+
+    console.log('📄 Extracting text from page:', pageNumber);
+
+    // Request text from pdf-content.js
+    const textResults = await chrome.tabs.sendMessage(tabId, { action: 'getPDFText' });
+    const extractedText = textResults?.text || '';
+
+    // Check if extraction failed or returned empty/invalid text
+    if (!extractedText || 
+        extractedText === 'No text could be extracted from PDF' ||
+        extractedText.length < 10) {
+      
+      console.warn('⚠️ Text extraction failed or returned minimal text');
+      console.log('💡 Chrome native PDF viewer detected - switching to OCR fallback');
+      
+      // Automatically fall back to OCR for Chrome's native viewer
+      return await extractPDFPageWithOCR(tabId, pageNumber);
+    }
+
+    console.log('✅ Text extraction complete, length:', extractedText.length);
+
+    // Filter out extension UI text that might have slipped through
+    const menuTexts = [
+      'Mentelo',
+      'Summarize Page',
+      'Translate Page',
+      'Translate Text',
+      'Text to Speech',
+      'Chat with Page',
+      'Call Mindy',
+      'Social Content',
+      'Save',
+      'Bookmark',
+      'Open Dashboard'
+    ];
+    
+    let cleanedText = extractedText;
+    for (const menuText of menuTexts) {
+      // Remove menu text and surrounding whitespace
+      const regex = new RegExp(`\\s*${menuText}\\s*`, 'gi');
+      cleanedText = cleanedText.replace(regex, ' ');
+    }
+    
+    // Clean up multiple spaces
+    cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
+    
+    console.log('🧹 Cleaned text, length:', cleanedText.length);
+
+    // Apply context limit safeguards
+    const maxChars = 10000;
+    const truncated = cleanedText.length > maxChars;
+    const finalText = truncated ? cleanedText.substring(0, maxChars) : cleanedText;
+
+    if (truncated) {
+      console.warn(`⚠️ Extracted text is large (${cleanedText.length} chars), truncating to ${maxChars}`);
+    }
+
+    // Restore popup
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        function: () => {
+          const popup = document.getElementById('ai-assistant-popup');
+          if (popup) {
+            popup.style.display = '';
+          }
+        }
+      });
+    } catch (e) {
+      console.log('Could not restore popup:', e);
+    }
+
+    return {
+      text: finalText,
+      truncated: truncated,
+      originalLength: extractedText.length,
+      pageNumber: pageNumber,
+      timestamp: Date.now(),
+      charCount: finalText.length,
+      method: 'text-extraction'
+    };
+  } catch (error) {
+    console.error('❌ PDF text extraction error:', error);
+    console.log('🔄 Falling back to OCR...');
+    
+    // Restore popup before falling back
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        function: () => {
+          const popup = document.getElementById('ai-assistant-popup');
+          if (popup) {
+            popup.style.display = '';
+          }
+        }
+      });
+    } catch (e) {
+      console.log('Could not restore popup:', e);
+    }
+    
+    // Fall back to OCR if text extraction fails
+    try {
+      return await extractPDFPageWithOCR(tabId, pageNumber);
+    } catch (ocrError) {
+      console.error('❌ OCR fallback also failed:', ocrError);
+      throw new Error('Could not extract text from PDF using either method. Please ensure you have a valid API key configured for OCR.');
+    }
+  }
+}
+
+// Extract PDF page content using OCR (for cloud AI with vision capabilities)
 async function extractPDFPageWithOCR(tabId, pageNumber = null) {
   try {
     console.log('📸 Capturing PDF page screenshot...');
@@ -1513,7 +1819,7 @@ async function recapturePDFPage(bannerElement) {
 
     // Extract PDF content with specified page number
     console.log('📸 Extracting PDF content...');
-    const result = await extractPDFPageWithOCR(pdfMode.currentTab.id, pageNumber);
+    const result = await extractPDFPage(pdfMode.currentTab.id, pageNumber);
     console.log('✅ Extraction complete. Page:', result.pageNumber, 'Length:', result.charCount);
 
     // Update the viewing page
@@ -1760,7 +2066,11 @@ function clearAllBookmarks() {
 
 // Organize bookmarks with AI
 async function organizeBookmarks() {
-  if (!apiKey) {
+  // Check if API key is needed (only for cloud AI)
+  const manager = await initializeSidePanelProviderManager();
+  const activeProvider = manager.getActiveProvider();
+  
+  if (activeProvider === 'cloud' && !apiKey) {
     alert('Please configure your API key first!');
     return;
   }
@@ -1830,7 +2140,6 @@ function getTaskIcon(task) {
     'translate-page': '🌐',
     'translate-selection': '🔤',
     'mindmap': '🧠',
-    'social-content': '📱',
     'extract-image-text': '🖼️',
     'explain-image': '🔍'
   };
@@ -2073,7 +2382,11 @@ async function sendChatMessage() {
 
   if (!message) return;
 
-  if (!apiKey) {
+  // Check if API key is needed (only for cloud AI)
+  const manager = await initializeSidePanelProviderManager();
+  const activeProvider = manager.getActiveProvider();
+  
+  if (activeProvider === 'cloud' && !apiKey) {
     alert('Please configure your API key first!');
     return;
   }
@@ -2119,7 +2432,7 @@ async function sendChatMessage() {
         console.log('📸 Capturing PDF page 1 on first message...');
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tabs[0]) {
-          const result = await extractPDFPageWithOCR(tabs[0].id, 1);
+          const result = await extractPDFPage(tabs[0].id, 1);
           addCapturedPage(result);
           pageContent = buildPDFContext();
         }
@@ -2589,6 +2902,15 @@ async function playNextChunk() {
 
 // Generate Text-to-Speech from selected text
 async function generateTextToSpeech(content) {
+  // TTS requires cloud AI (uses Gemini TTS model)
+  const manager = await initializeSidePanelProviderManager();
+  const activeProvider = manager.getActiveProvider();
+  
+  if (activeProvider !== 'cloud') {
+    alert('Text-to-Speech requires Cloud AI. Please switch to Cloud AI in Settings.');
+    return;
+  }
+  
   if (!apiKey) {
     alert('Please configure your API key first in Settings!');
     return;
@@ -2940,6 +3262,15 @@ async function handleTextAssist(prompt) {
 
 // Explain image using Gemini Vision API
 async function explainImage(imageUrl) {
+  // Image explanation requires cloud AI (multimodal support)
+  const manager = await initializeSidePanelProviderManager();
+  const activeProvider = manager.getActiveProvider();
+  
+  if (activeProvider !== 'cloud') {
+    showResult('⚠️ Image explanation requires Cloud AI. Please switch to Cloud AI in Settings.', 'error');
+    return;
+  }
+  
   if (!apiKey) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
@@ -3014,6 +3345,15 @@ Keep it brief and informative, like a quick summary for someone who can't see th
 
 // Extract text from image using Gemini Vision API
 async function extractImageText(imageUrl) {
+  // Image text extraction requires cloud AI (multimodal support)
+  const manager = await initializeSidePanelProviderManager();
+  const activeProvider = manager.getActiveProvider();
+  
+  if (activeProvider !== 'cloud') {
+    showResult('⚠️ Image text extraction requires Cloud AI. Please switch to Cloud AI in Settings.', 'error');
+    return;
+  }
+  
   if (!apiKey) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
@@ -3101,6 +3441,15 @@ let mindyTimerStart = null;
 let mindyTimerInterval = null;
 
 async function startMindyCall() {
+  // Mindy requires cloud AI for voice input and streaming
+  const manager = await initializeSidePanelProviderManager();
+  const activeProvider = manager.getActiveProvider();
+  
+  if (activeProvider !== 'cloud') {
+    alert('Call Mindy requires Cloud AI. Please switch to Cloud AI in Settings to use this feature.');
+    return;
+  }
+  
   if (!apiKey) {
     alert('Please configure your Gemini API key first in Settings.');
     switchTab('settings');
@@ -3821,8 +4170,8 @@ async function getPageContext(tab) {
         // Small delay to ensure popup is hidden
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Extract PDF content using OCR (page 1)
-        const result = await extractPDFPageWithOCR(tab.id, 1);
+        // Extract PDF content (page 1)
+        const result = await extractPDFPage(tab.id, 1);
 
         // Add to captured pages
         addCapturedPage(result);

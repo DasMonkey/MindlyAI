@@ -75,10 +75,6 @@ function createFloatingPopup() {
         Call Mindy
       </button>
       <div class="ai-btn-row">
-        <button class="ai-btn" data-action="social-content">
-          <span class="ai-btn-icon">📱</span>
-          Social Content
-        </button>
         <button class="ai-btn" data-action="save-bookmark">
           <span class="ai-btn-icon">🔖</span>
           Save Bookmark
@@ -202,9 +198,6 @@ async function handleButtonClick(e) {
       break;
     case 'translate-selection':
       await translateSelection();
-      break;
-    case 'social-content':
-      await generateSocialContent();
       break;
     case 'save-bookmark':
       await saveBookmark();
@@ -676,30 +669,6 @@ async function translateSelection() {
     translateBtn.innerHTML = originalHTML;
     translateBtn.disabled = false;
   }
-}
-
-async function generateSocialContent() {
-  // Prioritize selected text if available
-  let content;
-  if (selectedText && selectedText.trim().length > 50) {
-    console.log('✅ Using selected text for social content, length:', selectedText.length);
-    content = selectedText;
-  } else {
-    console.log('📄 No selection found, using page content');
-    content = await getPageText();
-  }
-  
-  // Open sidebar first
-  chrome.runtime.sendMessage({ action: 'openSidePanel' });
-  
-  // Then send the content generation request
-  chrome.runtime.sendMessage({
-    action: 'generateContent',
-    task: 'social-content',
-    content: content.substring(0, 3000),
-    url: window.location.href,
-    title: document.title
-  });
 }
 
 async function saveBookmark() {

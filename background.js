@@ -147,15 +147,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     case 'grammarCheck': {
-      // Handle grammar check with mini-flash-lite model
-      console.log('?? Background: Handling grammar check request');
-      handleGrammarCheck(request.prompt)
+      // Handle grammar check - accepts either 'text' (plain text) or 'prompt' (custom prompt)
+      console.log('📝 Background: Handling grammar check request');
+      const input = request.text || request.prompt;  // Support both formats
+      handleGrammarCheck(input)
         .then(result => {
-          console.log('? Background: Grammar check successful');
+          console.log('✅ Background: Grammar check successful');
           sendResponse({ result });
         })
         .catch(error => {
-          console.error('? Background: Grammar check error:', error);
+          console.error('❌ Background: Grammar check error:', error);
           sendResponse({ error: error.message });
         });
       return true; // Keep message channel open for async response
@@ -182,6 +183,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true });
       }
       return false;
+    }
+
+    case 'rewriteText': {
+      // Handle rewrite text requests using AI Provider Manager
+      console.log('🔄 Background: Handling rewriteText request');
+      handleRewriteText(request.text, request.options)
+        .then(result => {
+          console.log('✅ Background: rewriteText successful');
+          sendResponse({ result });
+        })
+        .catch(error => {
+          console.error('❌ Background: rewriteText error:', error);
+          sendResponse({ error: error.message });
+        });
+      return true; // Keep message channel open for async response
     }
 
     case 'textToSpeech':
@@ -391,6 +407,36 @@ async function handleTextAssist(prompt) {
       dataType: typeof response?.data,
       dataLength: response?.data?.length
     });
+
+    // Return the data (unwrap from normalized response)
+    if (!response || !response.data) {
+      throw new Error('Invalid response from AI provider: missing data');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('❌ Text assist error:', error);
+    throw error;
+  }
+}
+
+// Handle rewrite text requests using AI Provider Manager
+async function handleRewriteText(text, options = {}) {
+  try {
+    // Ensure provider manager is initialized
+    const manager = await initializeProviderManager();
+
+    console.log('🔄 Background: Processing rewrite using AI Provider Manager');
+    console.log('🔄 Background: Active provider:', manager.getActiveProvider());
+    console.log('🔄 Background: Text length:', text?.length, 'chars');
+    console.log('🔄 Background: Options:', options);
+
+    // Use provider manager to rewrite text
+    // For built-in AI, this will use the Rewriter API
+    // For cloud AI, it will fall back to generateContent with a prompt
+    const response = await manager.rewriteText(text, options);
+
+    console.log('✅ Background: Rewrite completed via', response?.provider);
 
     // Return the data (unwrap from normalized response)
     if (!response || !response.data) {

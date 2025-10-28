@@ -443,6 +443,7 @@ ${textOrPrompt}`;
   /**
    * Rewrite text
    * Wraps existing rewriting functionality
+   * Supports Rewriter API-compatible options
    */
   async rewriteText(text, options = {}) {
     const cacheKey = this.getCacheKey('rewriteText', text, options);
@@ -453,8 +454,42 @@ ${textOrPrompt}`;
     }
 
     try {
-      const tone = options.tone || 'neutral';
-      const prompt = `Rewrite the following text in a ${tone} tone:\n\n${text}`;
+      // Build prompt based on options (compatible with Rewriter API)
+      let prompt = '';
+      
+      // Add shared context if provided
+      if (options.sharedContext) {
+        prompt += `Context: ${options.sharedContext}\n\n`;
+      }
+      
+      // Add specific context if provided
+      if (options.context) {
+        prompt += `Additional context: ${options.context}\n\n`;
+      }
+      
+      // Build the main instruction
+      let instruction = 'Rewrite the following text';
+      
+      // Handle tone
+      if (options.tone && options.tone !== 'as-is') {
+        const toneMap = {
+          'more-formal': 'in a more formal and professional tone',
+          'more-casual': 'in a more casual and friendly tone',
+          'neutral': 'in a neutral tone'
+        };
+        instruction += ' ' + (toneMap[options.tone] || `in a ${options.tone} tone`);
+      }
+      
+      // Handle length
+      if (options.length && options.length !== 'as-is') {
+        if (options.length === 'shorter') {
+          instruction += ', making it more concise';
+        } else if (options.length === 'longer') {
+          instruction += ', expanding it with more detail';
+        }
+      }
+      
+      prompt += `${instruction}. Return ONLY the rewritten text, no explanations:\n\n${text}\n\nRewritten:`;
       
       const rewritten = await this.callGeminiApi(prompt);
       

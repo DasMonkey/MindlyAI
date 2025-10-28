@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mentelo Dashboard</title>
   <link rel="stylesheet" href="sidepanel.css">
 </head>
+
 <body>
   <div class="container">
     <div class="header">
@@ -40,388 +42,406 @@
 
       <!-- Content Area -->
       <div class="content-area">
-    <!-- Generate Tab -->
-    <div class="tab-content active" id="generateTab">
-      <div class="section">
-        <h2>🎯 Current Task</h2>
-        <div id="currentTask" class="task-display">
-          <p class="placeholder">No active task. Use the floating popup to start!</p>
-        </div>
-      </div>
-
-      <h2 style="font-size: 14px; margin-bottom: 8px; color: #ffffff; padding: 0;">📝 Result</h2>
-      <div id="resultArea" class="result-box">
-        <div class="loading" id="loading" style="display: none;">
-          <div class="spinner"></div>
-          <p>Generating content with AI...</p>
-        </div>
-        <div id="result" class="result-content"></div>
-      </div>
-      <div class="action-buttons" id="actionButtons" style="display: none;">
-        <button id="copyBtn" class="btn btn-secondary">📋 Copy</button>
-        <button id="downloadBtn" class="btn btn-secondary">💾 Download</button>
-        <button id="regenerateBtn" class="btn btn-primary">🔄 Regenerate</button>
-      </div>
-    </div>
-
-    <!-- Chat Tab -->
-    <div class="tab-content chat-fullscreen" id="chatTab">
-      <div class="chat-header">
-        <h2>💬 Chat with Page</h2>
-        <button id="clearChatBtn" class="btn btn-secondary">🗑️ Clear</button>
-      </div>
-      
-      <!-- PDF Status Banner for Chat -->
-      <div id="pdfStatusBannerChat" class="pdf-status-banner" style="display: none;"></div>
-      
-      <div id="chatMessages" class="chat-messages">
-        <div class="chat-message ai-message">
-          <div class="message-avatar">🤖</div>
-          <div class="message-content">
-            <p>Hello! I'm ready to answer questions about this page. What would you like to know?</p>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Tab Change Notification Button -->
-      <button id="chatRefreshBtn" class="chat-refresh-btn" style="display: none;">
-        <span class="refresh-icon">🔄</span>
-        <span class="refresh-text">New page detected - Start fresh chat</span>
-      </button>
-      
-      <div class="chat-input-container">
-        <input type="text" id="chatInput" class="chat-input" placeholder="Ask me anything about this page..." />
-        <button id="sendChatBtn" class="btn btn-primary chat-send-btn">➤</button>
-      </div>
-    </div>
-
-    <!-- Call Mindy Tab -->
-    <div class="tab-content mindy-fullscreen" id="mindyTab">
-      <div class="mindy-container">
-        <div class="mindy-header-panel">
-          <h2>🎤 Call Mindy - Voice AI</h2>
-          <div class="mindy-status-panel">
-            <div class="mindy-status-icon-panel">
-              <div class="mindy-pulse-panel"></div>
+        <!-- Generate Tab -->
+        <div class="tab-content active" id="generateTab">
+          <div class="section">
+            <h2>🎯 Current Task</h2>
+            <div id="currentTask" class="task-display">
+              <p class="placeholder">No active task. Use the floating popup to start!</p>
             </div>
-            <p id="mindyStatusPanel">Ready to start</p>
           </div>
-          <div class="mindy-timer-panel" id="mindyTimer" style="display: none;">
-            <span class="timer-icon">⏱️</span>
-            <span class="timer-text" id="mindyTimerText">00:00</span>
+
+          <h2 style="font-size: 14px; margin-bottom: 8px; color: #ffffff; padding: 0;">📝 Result</h2>
+          <div id="resultArea" class="result-box">
+            <div class="loading" id="loading" style="display: none;">
+              <div class="spinner"></div>
+              <p>Generating content with AI...</p>
+            </div>
+            <div id="result" class="result-content"></div>
+          </div>
+          <div class="action-buttons" id="actionButtons" style="display: none;">
+            <button id="copyBtn" class="btn btn-secondary">📋 Copy</button>
+            <button id="downloadBtn" class="btn btn-secondary">💾 Download</button>
+            <button id="regenerateBtn" class="btn btn-primary">🔄 Regenerate</button>
           </div>
         </div>
-        
-        <!-- PDF Status Banner for Mindy -->
-        <div id="pdfStatusBannerMindy" class="pdf-status-banner" style="display: none;"></div>
-        
-        <!-- New Session Button -->
-        <div style="display: flex; justify-content: flex-end; align-items: center; margin: 0 16px 4px 16px;">
-          <button id="mindyNewSessionBtn" class="mindy-new-session-btn">
-            ↻ New Session
+
+        <!-- Chat Tab -->
+        <div class="tab-content chat-fullscreen" id="chatTab">
+          <div class="chat-header">
+            <h2>💬 Chat with Page</h2>
+            <button id="clearChatBtn" class="btn btn-secondary">🗑️ Clear</button>
+          </div>
+
+          <!-- PDF Status Banner for Chat -->
+          <div id="pdfStatusBannerChat" class="pdf-status-banner" style="display: none;"></div>
+
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-message ai-message">
+              <div class="message-avatar">🤖</div>
+              <div class="message-content">
+                <p>Hello! I'm ready to answer questions about this page. What would you like to know?</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Change Notification Button -->
+          <button id="chatRefreshBtn" class="chat-refresh-btn" style="display: none;">
+            <span class="refresh-icon">🔄</span>
+            <span class="refresh-text">New page detected - Start fresh chat</span>
           </button>
-        </div>
-        
-        <div class="mindy-transcript-panel">
-          <div id="mindyTranscriptPanel">
-            <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can answer your questions via voice.</p>
-          </div>
-        </div>
-        
-        <!-- Tab Change Notification Button for Mindy -->
-        <button id="mindyRefreshBtn" class="chat-refresh-btn" style="display: none;">
-          <span class="refresh-icon">🔄</span>
-          <span class="refresh-text">New page detected - Start fresh call</span>
-        </button>
-        
-        <div class="mindy-controls-panel">
-          <button id="mindyStartBtn" class="btn btn-primary">
-            <span>🎤</span> Start Call
-          </button>
-          <button id="mindyMuteBtn" class="btn btn-secondary" style="display:none;">
-            <span id="mindyMuteIcon">🎤</span> <span id="mindyMuteText">Mute</span>
-          </button>
-          <button id="mindyEndBtn" class="btn btn-danger" style="display:none;">
-            <span>📞</span> End Call
-          </button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Clipboard Tab -->
-    <div class="tab-content clipboard-fullscreen" id="clipboardTab">
-      <div class="clipboard-header">
-        <h2>📋 Clipboard History</h2>
-        <button id="clearClipboardBtn" class="btn btn-danger">🗑️ Clear All</button>
-      </div>
-      <div id="clipboardList" class="clipboard-list">
-        <p class="placeholder">No clipboard items yet. Copy something to get started!</p>
-      </div>
-    </div>
-
-    <!-- Bookmarks Tab -->
-    <div class="tab-content" id="bookmarksTab">
-      <div class="section">
-        <div class="section-header">
-          <h2>🔖 Saved Bookmarks</h2>
-          <button id="clearAllBookmarksBtn" class="btn btn-danger">🗑️ Clear All</button>
-        </div>
-        <div id="bookmarksList" class="bookmarks-list">
-          <p class="placeholder">No bookmarks saved yet.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- History Tab -->
-    <div class="tab-content" id="historyTab">
-      <div class="section">
-        <div class="section-header">
-          <h2>📜 History</h2>
-          <button id="clearHistoryBtn" class="btn btn-danger">🗑️ Clear</button>
-        </div>
-        <div id="historyList" class="history-list">
-          <p class="placeholder">No history yet.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Settings Tab -->
-    <div class="tab-content" id="settingsTab">
-      <!-- AI Provider Selection -->
-      <div class="section">
-        <h2>🤖 AI Provider</h2>
-        <div class="provider-selector">
-          <div class="provider-option" id="builtinProvider">
-            <div class="provider-header">
-              <div class="provider-radio-wrapper">
-                <input type="radio" name="aiProvider" value="builtin" id="builtinRadio">
-              </div>
-              <div class="provider-title-wrapper">
-                <label for="builtinRadio" class="provider-title">
-                  <div class="provider-name-row">
-                    <span class="provider-name">Built-in AI</span>
-                    <span class="provider-model">(Gemini Nano)</span>
-                  </div>
-                  <span class="provider-status-inline" id="builtinStatusInline">⏳ Checking...</span>
-                </label>
-              </div>
-            </div>
-            <div class="provider-benefits">
-              <div class="benefit">✅ Free - No API costs</div>
-              <div class="benefit">🔒 Private - Runs locally</div>
-              <div class="benefit">⚡ Fast - No network latency</div>
-              <div class="benefit">📴 Offline - Works without internet</div>
-            </div>
-          </div>
-
-          <div class="provider-option" id="cloudProvider">
-            <div class="provider-header">
-              <div class="provider-radio-wrapper">
-                <input type="radio" name="aiProvider" value="cloud" id="cloudRadio">
-              </div>
-              <div class="provider-title-wrapper">
-                <label for="cloudRadio" class="provider-title">
-                  <div class="provider-name-row">
-                    <span class="provider-name">Cloud API</span>
-                    <span class="provider-model">(Gemini)</span>
-                  </div>
-                  <span class="provider-status-inline" id="cloudStatusInline">⏳ Checking...</span>
-                </label>
-              </div>
-            </div>
-            <div class="provider-benefits">
-              <div class="benefit">🌐 Always available with API key</div>
-              <div class="benefit">🚀 Latest models and features</div>
-              <div class="benefit">📊 Higher token limits</div>
-            </div>
+          <div class="chat-input-container">
+            <input type="text" id="chatInput" class="chat-input" placeholder="Ask me anything about this page..." />
+            <button id="sendChatBtn" class="btn btn-primary chat-send-btn">➤</button>
           </div>
         </div>
 
-        <div class="provider-info">
-          <p><strong>💡 How it works:</strong></p>
-          <ul>
-            <li>Built-in AI is prioritized when available</li>
-            <li>Automatically falls back to Cloud API if needed</li>
-            <li>You can manually switch providers anytime</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- Provider Status Dashboard -->
-      <div class="section">
-        <h2>📊 Provider Status Dashboard</h2>
-        <div class="provider-dashboard">
-          <div class="dashboard-card" id="builtinDashboard">
-            <div class="dashboard-header">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="dashboard-icon">⚡</span>
-                <h3>Built-in AI Status</h3>
+        <!-- Call Mindy Tab -->
+        <div class="tab-content mindy-fullscreen" id="mindyTab">
+          <div class="mindy-container">
+            <div class="mindy-header-panel">
+              <h2>🎤 Call Mindy - Voice AI</h2>
+              <div class="mindy-status-panel">
+                <div class="mindy-status-icon-panel">
+                  <div class="mindy-pulse-panel"></div>
+                </div>
+                <p id="mindyStatusPanel">Ready to start</p>
               </div>
-              <button id="openTestPageBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" title="Open Built-in AI Test Suite">
-                🧪 Test APIs
+              <div class="mindy-timer-panel" id="mindyTimer" style="display: none;">
+                <span class="timer-icon">⏱️</span>
+                <span class="timer-text" id="mindyTimerText">00:00</span>
+              </div>
+            </div>
+
+            <!-- PDF Status Banner for Mindy -->
+            <div id="pdfStatusBannerMindy" class="pdf-status-banner" style="display: none;"></div>
+
+            <!-- New Session Button -->
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin: 0 16px 4px 16px;">
+              <button id="mindyNewSessionBtn" class="mindy-new-session-btn">
+                ↻ New Session
               </button>
             </div>
-            <div class="dashboard-content">
-              <div class="status-row">
-                <span class="status-label">Overall Status:</span>
-                <span class="status-value" id="builtinOverallStatus">Checking...</span>
+
+            <div class="mindy-transcript-panel">
+              <div id="mindyTranscriptPanel">
+                <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can
+                  answer your questions via voice.</p>
               </div>
-              <div class="status-row">
-                <span class="status-label">Proofreader API:</span>
-                <span class="status-value" id="builtinProofreaderStatus">Checking...</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Translator API:</span>
-                <span class="status-value" id="builtinTranslatorStatus">Checking...</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Summarizer API:</span>
-                <span class="status-value" id="builtinSummarizerStatus">Checking...</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Rewriter API:</span>
-                <span class="status-value" id="builtinRewriterStatus">Checking...</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Writer API:</span>
-                <span class="status-value" id="builtinWriterStatus">Checking...</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Prompt API:</span>
-                <span class="status-value" id="builtinPromptStatus">Checking...</span>
-              </div>
-              <div class="download-status" id="builtinDownloadStatus" style="display: none;">
-                <div class="download-progress-bar">
-                  <div class="download-progress-fill" id="builtinDownloadProgress"></div>
+            </div>
+
+            <!-- Tab Change Notification Button for Mindy -->
+            <button id="mindyRefreshBtn" class="chat-refresh-btn" style="display: none;">
+              <span class="refresh-icon">🔄</span>
+              <span class="refresh-text">New page detected - Start fresh call</span>
+            </button>
+
+            <div class="mindy-controls-panel">
+              <button id="mindyStartBtn" class="btn btn-primary">
+                <span>🎤</span> Start Call
+              </button>
+              <button id="mindyMuteBtn" class="btn btn-secondary" style="display:none;">
+                <span id="mindyMuteIcon">🎤</span> <span id="mindyMuteText">Mute</span>
+              </button>
+              <button id="mindyEndBtn" class="btn btn-danger" style="display:none;">
+                <span>📞</span> End Call
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clipboard Tab -->
+        <div class="tab-content clipboard-fullscreen" id="clipboardTab">
+          <div class="clipboard-header">
+            <h2>📋 Clipboard History</h2>
+            <button id="clearClipboardBtn" class="btn btn-danger">🗑️ Clear All</button>
+          </div>
+          <div id="clipboardList" class="clipboard-list">
+            <p class="placeholder">No clipboard items yet. Copy something to get started!</p>
+          </div>
+        </div>
+
+        <!-- Bookmarks Tab -->
+        <div class="tab-content" id="bookmarksTab">
+          <div class="section">
+            <div class="section-header">
+              <h2>🔖 Saved Bookmarks</h2>
+              <button id="clearAllBookmarksBtn" class="btn btn-danger">🗑️ Clear All</button>
+            </div>
+            <div id="bookmarksList" class="bookmarks-list">
+              <p class="placeholder">No bookmarks saved yet.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Tab -->
+        <div class="tab-content" id="historyTab">
+          <div class="section">
+            <div class="section-header">
+              <h2>📜 History</h2>
+              <button id="clearHistoryBtn" class="btn btn-danger">🗑️ Clear</button>
+            </div>
+            <div id="historyList" class="history-list">
+              <p class="placeholder">No history yet.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="settingsTab">
+          <!-- AI Provider Selection -->
+          <div class="section">
+            <h2>🤖 AI Provider</h2>
+            <div class="provider-selector-compact">
+              <div class="provider-card-compact" id="builtinProviderCard">
+                <input type="radio" name="aiProvider" value="builtin" id="builtinRadio">
+                <label for="builtinRadio" class="provider-label-compact">
+                  <div class="provider-icon">⚡</div>
+                  <div class="provider-info-compact">
+                    <div class="provider-name-compact">Built-in AI</div>
+                    <div class="provider-model-compact">Gemini Nano</div>
+                    <div class="provider-status-compact" id="builtinStatusCompact">⏳ Checking...</div>
+                  </div>
+                </label>
+
+                <!-- Hover Tooltip -->
+                <div class="provider-tooltip">
+                  <div class="tooltip-section">
+                    <div class="tooltip-title">✨ Benefits</div>
+                    <div class="tooltip-item">✅ Free - No API costs</div>
+                    <div class="tooltip-item">🔒 Private - Runs locally</div>
+                    <div class="tooltip-item">⚡ Fast - No network latency</div>
+                    <div class="tooltip-item">📴 Offline capable</div>
+                  </div>
+                  <div class="tooltip-section">
+                    <div class="tooltip-title">📋 Features</div>
+                    <div class="tooltip-item">💬 Chat with Page (Web)</div>
+                    <div class="tooltip-item">✍️ Grammar Check</div>
+                    <div class="tooltip-item">🌐 Translation</div>
+                    <div class="tooltip-item">📝 Summarization</div>
+                    <div class="tooltip-item">✨ Text Rewriting</div>
+                    <div class="tooltip-item">🎬 YouTube Summaries</div>
+                  </div>
                 </div>
-                <span class="download-text" id="builtinDownloadText">Downloading model...</span>
+              </div>
+
+              <div class="provider-card-compact" id="cloudProviderCard">
+                <input type="radio" name="aiProvider" value="cloud" id="cloudRadio">
+                <label for="cloudRadio" class="provider-label-compact">
+                  <div class="provider-icon">☁️</div>
+                  <div class="provider-info-compact">
+                    <div class="provider-name-compact">Cloud API</div>
+                    <div class="provider-model-compact">Gemini</div>
+                    <div class="provider-status-compact" id="cloudStatusCompact">⏳ Checking...</div>
+                  </div>
+                </label>
+
+                <!-- Hover Tooltip -->
+                <div class="provider-tooltip">
+                  <div class="tooltip-section">
+                    <div class="tooltip-title">✨ Benefits</div>
+                    <div class="tooltip-item">🌐 Always available</div>
+                    <div class="tooltip-item">🚀 Latest models</div>
+                    <div class="tooltip-item">📊 Higher token limits</div>
+                  </div>
+                  <div class="tooltip-section">
+                    <div class="tooltip-title">📋 Everything in Built-in AI, plus:</div>
+                    <div class="tooltip-item">📄 Faster Processing with advanced AI models</div>
+                    <div class="tooltip-item">🎤 Call Mindy (Voice)</div>
+                    <div class="tooltip-item">📄 Chat With Page (web/pdf)</div>
+                    <div class="tooltip-item">🖼️ Image Explanation</div>
+                    <div class="tooltip-item">📸 Image Text Extraction</div>
+                    <div class="tooltip-item">🔊 Text-to-Speech</div>
+                    <div class="tooltip-item">🎯 Multimodal features</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="dashboard-card" id="cloudDashboard">
-            <div class="dashboard-header">
-              <span class="dashboard-icon">☁️</span>
-              <h3>Cloud API Status</h3>
+          <!-- Provider Status Dashboard -->
+          <div class="section">
+            <h2>📊 Provider Status Dashboard</h2>
+            <div class="provider-dashboard">
+              <div class="dashboard-card" id="builtinDashboard">
+                <div class="dashboard-header">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="dashboard-icon">⚡</span>
+                    <h3>Built-in AI Status</h3>
+                  </div>
+                  <button id="openTestPageBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 10px;"
+                    title="Open Built-in AI Test Suite">
+                    🧪 Test
+                  </button>
+                </div>
+                <div class="dashboard-content">
+                  <div class="status-row">
+                    <span class="status-label">Overall Status:</span>
+                    <span class="status-value" id="builtinOverallStatus">Checking...</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Proofreader API:</span>
+                    <span class="status-value" id="builtinProofreaderStatus">Checking...</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Translator API:</span>
+                    <span class="status-value" id="builtinTranslatorStatus">Checking...</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Summarizer API:</span>
+                    <span class="status-value" id="builtinSummarizerStatus">Checking...</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Rewriter API:</span>
+                    <span class="status-value" id="builtinRewriterStatus">Checking...</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Writer API:</span>
+                    <span class="status-value" id="builtinWriterStatus">Checking...</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Prompt API:</span>
+                    <span class="status-value" id="builtinPromptStatus">Checking...</span>
+                  </div>
+                  <div class="download-status" id="builtinDownloadStatus" style="display: none;">
+                    <div class="download-progress-bar">
+                      <div class="download-progress-fill" id="builtinDownloadProgress"></div>
+                    </div>
+                    <span class="download-text" id="builtinDownloadText">Downloading model...</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dashboard-card" id="cloudDashboard">
+                <div class="dashboard-header">
+                  <span class="dashboard-icon">☁️</span>
+                  <h3>Cloud API Status</h3>
+                </div>
+                <div class="dashboard-content">
+                  <div class="status-row">
+                    <span class="status-label">API Key:</span>
+                    <span class="status-value" id="cloudApiKeyStatus">Not configured</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Connection:</span>
+                    <span class="status-value" id="cloudConnectionStatus">Not tested</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">Supported Features:</span>
+                    <span class="status-value">All features</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dashboard-actions">
+                <button id="refreshProviderStatus" class="btn btn-secondary">🔄 Refresh Status</button>
+              </div>
+              <p style="font-size: 10px; opacity: 0.7; text-align: center; margin-top: 8px;">
+                💡 Tip: Click "Downloadable" status to download models
+              </p>
             </div>
-            <div class="dashboard-content">
-              <div class="status-row">
-                <span class="status-label">API Key:</span>
-                <span class="status-value" id="cloudApiKeyStatus">Not configured</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Connection:</span>
-                <span class="status-value" id="cloudConnectionStatus">Not tested</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Supported Features:</span>
-                <span class="status-value">All features</span>
-              </div>
+          </div>
+
+          <div class="section">
+            <h2>🔑 Cloud API Key</h2>
+            <div class="input-group">
+              <input type="password" id="apiKey" placeholder="Enter your Gemini API key (for Cloud API)">
+              <button id="saveApiKey" class="btn btn-primary">Save</button>
+              <button id="removeApiKey" class="btn btn-text" style="display: none;">🗑️ Remove Key</button>
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link">Get API Key</a>
+            </div>
+            <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">
+              💡 API key is only needed for Cloud API fallback
+            </p>
+          </div>
+
+          <div class="section">
+            <h2>🌐 Translation Settings</h2>
+            <div class="input-group">
+              <label for="targetLanguage">Preferred Language:</label>
+              <select id="targetLanguage" class="select-input">
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="zh">Chinese</option>
+                <option value="ja">Japanese</option>
+                <option value="ko">Korean</option>
+                <option value="pt">Portuguese</option>
+                <option value="ru">Russian</option>
+                <option value="ar">Arabic</option>
+                <option value="hi">Hindi</option>
+                <option value="it">Italian</option>
+              </select>
+              <button id="saveLanguage" class="btn btn-primary">Save</button>
             </div>
           </div>
 
-          <div class="dashboard-actions">
-            <button id="refreshProviderStatus" class="btn btn-secondary">🔄 Refresh Status</button>
+          <div class="section">
+            <h2>🎤 Call Mindy Voice Settings</h2>
+            <div class="input-group">
+              <label for="mindyVoice">Voice:</label>
+              <select id="mindyVoice" class="select-input">
+                <option value="Zephyr">Zephyr - Female (Clear)</option>
+                <option value="Puck">Puck - Male (Upbeat)</option>
+                <option value="Aoede" selected>Aoede - Female (Breezy)</option>
+                <option value="Charon">Charon - Male (Informative)</option>
+                <option value="Kore">Kore - Female (Firm)</option>
+                <option value="Fenrir">Fenrir - Male (Excitable)</option>
+                <option value="Orbit">Orbit - Male (Firm)</option>
+                <option value="Puck2">Puck 2 - Male (Upbeat, alt)</option>
+                <option value="Charon2">Charon 2 - Male (Informative, alt)</option>
+              </select>
+              <button id="saveMindyVoice" class="btn btn-primary">Save</button>
+              <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">💡 Tip: Try different voices to find your
+                favorite!</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>🔊 Text-to-Speech Settings</h2>
+            <div class="input-group">
+              <label for="ttsVoice">Voice:</label>
+              <select id="ttsVoice" class="select-input">
+                <option value="Aoede">Aoede (Breezy)</option>
+                <option value="Puck">Puck (Upbeat)</option>
+                <option value="Kore">Kore (Firm)</option>
+                <option value="Charon">Charon (Informative)</option>
+                <option value="Fenrir">Fenrir (Excitable)</option>
+                <option value="Leda">Leda (Youthful)</option>
+                <option value="Orus">Orus (Firm)</option>
+                <option value="Callirrhoe">Callirrhoe (Easy-going)</option>
+                <option value="Autonoe">Autonoe (Bright)</option>
+                <option value="Enceladus">Enceladus (Breathy)</option>
+                <option value="Iapetus">Iapetus (Clear)</option>
+                <option value="Umbriel">Umbriel (Easy-going)</option>
+                <option value="Algieba">Algieba (Smooth)</option>
+                <option value="Despina">Despina (Smooth)</option>
+                <option value="Erinome">Erinome (Clear)</option>
+              </select>
+              <label for="ttsMaxChars">Max Characters:</label>
+              <input type="number" id="ttsMaxChars" placeholder="1000" min="100" max="5000" value="1000">
+              <label>Speech Speed:</label>
+              <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button id="ttsSpeedSlow" class="btn btn-secondary" style="flex: 1;">Slow</button>
+                <button id="ttsSpeedNormal" class="btn btn-secondary" style="flex: 1;">Normal</button>
+                <button id="ttsSpeedFast" class="btn btn-secondary" style="flex: 1;">Fast</button>
+              </div>
+              <button id="saveTTSSettings" class="btn btn-primary">Save Voice & Max Chars</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>ℹ️ About</h2>
+            <div class="about-info">
+              <p><strong>Version:</strong> 1.0.0</p>
+              <p><strong>Model:</strong> Gemini</p>
+              <p><strong>Copyright 2025</strong> Wen Z, polydigits@gmail.com</p>
+              <p><a href="https://mentelo-chrome-exten-88lw.bolt.host" target="_blank" class="link">Website</a></p>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="section">
-        <h2>🔑 Cloud API Key</h2>
-        <div class="input-group">
-          <input type="password" id="apiKey" placeholder="Enter your Gemini API key (for Cloud API)">
-          <button id="saveApiKey" class="btn btn-primary">Save</button>
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link">Get API Key</a>
-        </div>
-        <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">
-          💡 API key is only needed for Cloud API fallback
-        </p>
-      </div>
-
-      <div class="section">
-        <h2>🌐 Translation Settings</h2>
-        <div class="input-group">
-          <label for="targetLanguage">Preferred Language:</label>
-          <select id="targetLanguage" class="select-input">
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="zh">Chinese</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
-            <option value="pt">Portuguese</option>
-            <option value="ru">Russian</option>
-            <option value="ar">Arabic</option>
-            <option value="hi">Hindi</option>
-            <option value="it">Italian</option>
-          </select>
-          <button id="saveLanguage" class="btn btn-primary">Save</button>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>🎤 Call Mindy Voice Settings</h2>
-        <div class="input-group">
-          <label for="mindyVoice">Voice:</label>
-          <select id="mindyVoice" class="select-input">
-            <option value="Zephyr">Zephyr - Female (Clear)</option>
-            <option value="Puck">Puck - Male (Upbeat)</option>
-            <option value="Aoede" selected>Aoede - Female (Breezy)</option>
-            <option value="Charon">Charon - Male (Informative)</option>
-            <option value="Kore">Kore - Female (Firm)</option>
-            <option value="Fenrir">Fenrir - Male (Excitable)</option>
-            <option value="Orbit">Orbit - Male (Firm)</option>
-            <option value="Puck2">Puck 2 - Male (Upbeat, alt)</option>
-            <option value="Charon2">Charon 2 - Male (Informative, alt)</option>
-          </select>
-          <button id="saveMindyVoice" class="btn btn-primary">Save</button>
-          <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">💡 Tip: Try different voices to find your favorite!</p>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>🔊 Text-to-Speech Settings</h2>
-        <div class="input-group">
-          <label for="ttsVoice">Voice:</label>
-          <select id="ttsVoice" class="select-input">
-            <option value="Aoede">Aoede (Breezy)</option>
-            <option value="Puck">Puck (Upbeat)</option>
-            <option value="Kore">Kore (Firm)</option>
-            <option value="Charon">Charon (Informative)</option>
-            <option value="Fenrir">Fenrir (Excitable)</option>
-            <option value="Leda">Leda (Youthful)</option>
-            <option value="Orus">Orus (Firm)</option>
-            <option value="Callirrhoe">Callirrhoe (Easy-going)</option>
-            <option value="Autonoe">Autonoe (Bright)</option>
-            <option value="Enceladus">Enceladus (Breathy)</option>
-            <option value="Iapetus">Iapetus (Clear)</option>
-            <option value="Umbriel">Umbriel (Easy-going)</option>
-            <option value="Algieba">Algieba (Smooth)</option>
-            <option value="Despina">Despina (Smooth)</option>
-            <option value="Erinome">Erinome (Clear)</option>
-          </select>
-          <label for="ttsMaxChars">Max Characters:</label>
-          <input type="number" id="ttsMaxChars" placeholder="1000" min="100" max="5000" value="1000">
-          <label>Speech Speed:</label>
-          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <button id="ttsSpeedSlow" class="btn btn-secondary" style="flex: 1;">Slow</button>
-            <button id="ttsSpeedNormal" class="btn btn-secondary" style="flex: 1;">Normal</button>
-            <button id="ttsSpeedFast" class="btn btn-secondary" style="flex: 1;">Fast</button>
-          </div>
-          <button id="saveTTSSettings" class="btn btn-primary">Save Voice & Max Chars</button>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>ℹ️ About</h2>
-        <div class="about-info">
-          <p><strong>Version:</strong> 1.0.0</p>
-          <p><strong>Model:</strong> Gemini APIs</p>
-          <p><a href="https://github.com" target="_blank" class="link">Documentation</a></p>
-        </div>
-      </div>
-    </div>
       </div> <!-- Close content-area -->
     </div> <!-- Close main-layout -->
   </div>
@@ -444,7 +464,8 @@
   <script src="builtin-ai-provider.js"></script>
   <script src="cloud-ai-provider.js"></script>
   <script src="provider-status-ui.js"></script>
-  
+
   <script src="sidepanel.js"></script>
 </body>
+
 </html>

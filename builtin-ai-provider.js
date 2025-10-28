@@ -104,6 +104,11 @@ class BuiltInAIProvider {
           sourceLanguage: 'en',
           targetLanguage: 'es'
         });
+      } else if (apiName === 'Proofreader') {
+        // Proofreader API requires expectedInputLanguages parameter
+        availability = await API.availability({
+          expectedInputLanguages: ['en']
+        });
       } else if (apiName === 'LanguageModel') {
         // LanguageModel (Prompt API) should specify output language
         availability = await API.availability({
@@ -286,7 +291,7 @@ class BuiltInAIProvider {
 
   /**
    * Check grammar and spelling
-   * Can use either Proofreader API (for simple text) or Prompt API (for custom prompts)
+   * Tries Proofreader API first (for plain text), falls back to Prompt API
    */
   async checkGrammar(textOrPrompt, options = {}) {
     const cacheKey = this.getCacheKey('checkGrammar', textOrPrompt);
@@ -302,15 +307,52 @@ class BuiltInAIProvider {
 
       if (isFullPrompt) {
         // Use Prompt API for custom prompts
+        console.log('🔤 Using Prompt API for grammar check (custom prompt detected)');
         return await this.checkGrammarWithPromptAPI(textOrPrompt, options);
-      } else {
-        // Use Proofreader API for simple text
-        return await this.checkGrammarWithProofreader(textOrPrompt, options);
       }
+
+      // For plain text, try Proofreader API first
+      const proofreaderStatus = this.apiStatus.get('Proofreader');
+      if (proofreaderStatus && proofreaderStatus.availability !== 'unavailable') {
+        try {
+          console.log('✨ Using Proofreader API for grammar check');
+          return await this.checkGrammarWithProofreader(textOrPrompt, options);
+        } catch (proofreaderError) {
+          console.warn('⚠️ Proofreader API failed, falling back to Prompt API:', proofreaderError.message);
+          // Fall through to Prompt API fallback
+        }
+      }
+
+      // Fallback: Use Prompt API with a generated prompt
+      console.log('🔤 Using Prompt API for grammar check (fallback)');
+      const prompt = this.generateGrammarCheckPrompt(textOrPrompt);
+      return await this.checkGrammarWithPromptAPI(prompt, options);
+
     } catch (error) {
       console.error('❌ Grammar check error:', error);
       throw error;
     }
+  }
+
+  /**
+   * Generate a grammar check prompt for Prompt API
+   */
+  generateGrammarCheckPrompt(text) {
+    return `You are an expert grammar and spelling checker. Analyze the text and return ONLY a JSON array of errors.
+
+Text to check:
+"""
+${text}
+"""
+
+Return format: [{"error": "wrong text", "correction": "correct text", "type": "grammar|spelling|punctuation", "message": "explanation"}]
+
+Rules:
+- Only flag actual errors
+- Return empty array [] if no errors
+- Return ONLY valid JSON, no markdown
+
+JSON response:`;
   }
 
   /**
@@ -401,12 +443,12 @@ class BuiltInAIProvider {
     }
 
     const config = {
-      outputLanguage: 'en', // Required to suppress warnings
+      expectedInputLanguages: options.expectedInputLanguages || ['en'],
       monitor: this.monitorDownload('Proofreader')
     };
 
-    // Use LanguageModel for proofreading (Proofreader API uses LanguageModel)
-    const proofreader = await self.LanguageModel.create(config);
+    // Use the actual Proofreader API
+    const proofreader = await self.Proofreader.create(config);
     this.sessions.set(sessionKey, proofreader);
 
     return proofreader;
@@ -414,6 +456,20 @@ class BuiltInAIProvider {
 
   /**
    * Format Proofreader API result to unified format
+   * 
+   * Proofreader API returns:
+   * {
+   *   corrected: "fully corrected text",
+   *   corrections: [
+   *     {
+   *       startIndex: 0,
+   *       endIndex: 4,
+   *       correction: "corrected text",
+   *       type: "grammar" | "spelling" | "punctuation",
+   *       explanation: "why this correction is needed"
+   *     }
+   *   ]
+   * }
    */
   formatProofreaderResult(apiResult, originalText) {
     if (!apiResult || !apiResult.corrections) {
@@ -593,7 +649,7 @@ class BuiltInAIProvider {
   // ==================== REWRITER API ====================
 
   /**
-   * Rewrite text using Rewriter API
+   * Rewrite text using Rewriter API with fallback to Prompt API
    */
   async rewriteText(text, options = {}) {
     const cacheKey = this.getCacheKey('rewriteText', text, options);
@@ -605,22 +661,65 @@ class BuiltInAIProvider {
 
     try {
       const status = this.apiStatus.get('Rewriter');
-      if (!status || status.availability === 'unavailable') {
-        throw new Error('Rewriter API not available');
+      
+      // Try to use Rewriter API if available
+      if (status && status.availability !== 'unavailable') {
+        console.log('🔄 Using Rewriter API for rewrite');
+        
+        if (!this.checkUserActivation()) {
+          throw new Error('User activation required');
+        }
+
+        const rewriter = await this.createRewriterSession(options);
+        const result = await rewriter.rewrite(text, {
+          context: options.context,
+          tone: options.tone
+        });
+
+        this.setCache(cacheKey, result);
+        return result;
       }
-
-      if (!this.checkUserActivation()) {
-        throw new Error('User activation required');
+      
+      // Fallback to Prompt API if Rewriter is unavailable
+      console.log('⚠️ Rewriter API not available, falling back to Prompt API');
+      
+      // Build prompt based on options
+      let prompt = '';
+      
+      if (options.sharedContext) {
+        prompt += `Context: ${options.sharedContext}\n\n`;
       }
-
-      const rewriter = await this.createRewriterSession(options);
-      const result = await rewriter.rewrite(text, {
-        context: options.context,
-        tone: options.tone
-      });
-
+      
+      if (options.context) {
+        prompt += `Additional context: ${options.context}\n\n`;
+      }
+      
+      let instruction = 'Rewrite the following text';
+      
+      if (options.tone && options.tone !== 'as-is') {
+        const toneMap = {
+          'more-formal': 'in a more formal and professional tone',
+          'more-casual': 'in a more casual and friendly tone'
+        };
+        instruction += ' ' + (toneMap[options.tone] || `in a ${options.tone} tone`);
+      }
+      
+      if (options.length && options.length !== 'as-is') {
+        if (options.length === 'shorter') {
+          instruction += ', making it more concise';
+        } else if (options.length === 'longer') {
+          instruction += ', expanding it with more detail';
+        }
+      }
+      
+      prompt += `${instruction}. Return ONLY the rewritten text, no explanations:\n\n${text}\n\nRewritten:`;
+      
+      // Use Prompt API as fallback
+      const result = await this.generateContent(prompt, options);
+      
       this.setCache(cacheKey, result);
       return result;
+      
     } catch (error) {
       console.error('❌ Rewriter error:', error);
       throw error;

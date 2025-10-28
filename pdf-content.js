@@ -46,8 +46,58 @@ function extractFromPDFJS() {
   return extractedText.trim();
 }
 
-// Extract text from any visible text on page
+// Extract text from Chrome's native PDF viewer
+function extractFromChromeViewer() {
+  // Chrome's native PDF viewer uses an embed element
+  const embed = document.querySelector('embed[type="application/pdf"]');
+  
+  if (embed) {
+    console.log('⚠️ Chrome native PDF viewer detected - text extraction not supported');
+    console.log('💡 Recommend using OCR (Cloud AI) for Chrome native viewer');
+    return '';
+  }
+  
+  return '';
+}
+
+// Extract text from any visible text on page (fallback)
 function extractVisibleText() {
+  // First, check if there's a PDF embed - if so, we can't extract text
+  const embed = document.querySelector('embed[type="application/pdf"]');
+  if (embed) {
+    console.log('⚠️ Chrome native PDF viewer - cannot extract text from embed');
+    return '';
+  }
+  
+  // Skip extraction from extension UI elements
+  const skipSelectors = [
+    '#ai-assistant-popup',
+    '.ai-assistant-button',
+    '[data-extension-id]',
+    '.chrome-extension',
+    '#pdfPageModal',
+    '[id*="extension"]',
+    '[class*="extension"]'
+  ];
+  
+  // Also skip by checking for common extension UI text
+  const skipTexts = [
+    'Mentelo',
+    'Summarize Page',
+    'Translate Page',
+    'Translate Text',
+    'Text to Speech',
+    'Chat with Page',
+    'Call Mindy',
+    'Social Content',
+    'Save',
+    'Bookmark',
+    'Open Dashboard',
+    'Fix Grammar',
+    'Rewrite',
+    'Rephrase'
+  ];
+  
   // Get all text from the page (works for some PDF viewers)
   const walker = document.createTreeWalker(
     document.body,
@@ -55,17 +105,34 @@ function extractVisibleText() {
     {
       acceptNode: function(node) {
         // Skip script, style, and empty text nodes
-        if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+        const text = node.textContent.trim();
+        if (!text) return NodeFilter.FILTER_REJECT;
         
         const parent = node.parentElement;
-        if (parent && (parent.tagName === 'SCRIPT' || 
-                       parent.tagName === 'STYLE' || 
-                       parent.tagName === 'NOSCRIPT')) {
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        
+        // Skip extension UI elements by selector
+        for (const selector of skipSelectors) {
+          if (parent.closest(selector)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+        }
+        
+        // Skip extension UI elements by text content
+        for (const skipText of skipTexts) {
+          if (text.includes(skipText)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+        }
+        
+        if (parent.tagName === 'SCRIPT' || 
+            parent.tagName === 'STYLE' || 
+            parent.tagName === 'NOSCRIPT') {
           return NodeFilter.FILTER_REJECT;
         }
         
         // Check if text is visible
-        if (parent && parent.offsetParent === null) {
+        if (parent.offsetParent === null) {
           return NodeFilter.FILTER_REJECT;
         }
         
@@ -95,9 +162,18 @@ async function initPDFExtraction() {
     pdfText = extractFromPDFJS();
     console.log('📄 Extracted text from PDF.js viewer, length:', pdfText.length);
   } else {
-    // Fallback: try to get any visible text
-    pdfText = extractVisibleText();
-    console.log('📄 Extracted visible text, length:', pdfText.length);
+    // Check if it's Chrome's native viewer (has embed element)
+    const embed = document.querySelector('embed[type="application/pdf"]');
+    if (embed) {
+      // Chrome native viewer - cannot extract text
+      console.log('⚠️ Chrome native PDF viewer detected - text extraction not supported');
+      console.log('💡 Use OCR (Cloud AI) or open PDF in Firefox/PDF.js viewer');
+      pdfText = '';
+    } else {
+      // Fallback: try to get any visible text (for other PDF viewers)
+      pdfText = extractVisibleText();
+      console.log('📄 Extracted visible text, length:', pdfText.length);
+    }
   }
   
   // If we got text, store it globally

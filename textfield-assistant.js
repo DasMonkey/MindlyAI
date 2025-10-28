@@ -1179,12 +1179,44 @@ Concise version:`
   }
 
   async rephrase(text) {
-    const prompt = `Rephrase this text differently while keeping the same meaning. Return ONLY the rephrased text, no explanations:
-
-${text}
-
-Rephrased:`;
-    return this.callAI(prompt, 'rephrase');
+    console.log('🔄 Starting rephrase for text:', text.substring(0, 50) + '...');
+    
+    if (!text || !text.trim()) {
+      throw new Error('No text provided for rephrasing');
+    }
+    
+    // Use dedicated rewrite action that will route to Rewriter API for built-in AI
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        action: 'rewriteText',
+        text: text,
+        options: {
+          tone: 'as-is',
+          length: 'as-is',
+          format: 'plain-text',
+          sharedContext: 'Rephrase this text differently while keeping the same meaning.'
+        }
+      }, (response) => {
+        console.log('🔄 Received rephrase response:', response);
+        
+        if (chrome.runtime.lastError) {
+          console.error('❌ Chrome runtime error:', chrome.runtime.lastError);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (response?.result) {
+          console.log('✅ Rephrase successful');
+          resolve(response.result);
+        } else if (response?.error) {
+          console.error('❌ Rephrase error:', response.error);
+          reject(new Error(response.error));
+        } else {
+          console.error('❌ No result in response');
+          reject(new Error('Rephrase failed - no result returned'));
+        }
+      });
+    });
   }
 
   async translate(text) {
