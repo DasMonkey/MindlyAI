@@ -481,18 +481,30 @@ class SelectionPopup {
     const range = this.savedRange;
     const fieldRect = this.field.getBoundingClientRect();
 
-    // Prefer the last client rect (bottom line) for multi-line selections
+    // Get the selection rectangle - prefer the last line for multi-line selections
     let baseRect = null;
     const rectList = range.getClientRects?.();
     if (rectList && rectList.length > 0) {
+      // Use the last rect (bottom line of selection)
       baseRect = rectList[rectList.length - 1];
     } else {
       baseRect = range.getBoundingClientRect();
     }
 
-    // If selection rect is empty (e.g., inputs/textarea), fall back to field rect
-    if (!baseRect || (baseRect.width === 0 && baseRect.height === 0)) {
-      baseRect = fieldRect;
+    // For input/textarea elements, the range rect might be at 0,0
+    // In that case, we need to calculate position differently
+    if (!baseRect || (baseRect.width === 0 && baseRect.height === 0) || 
+        (baseRect.top === 0 && baseRect.left === 0)) {
+      // For input/textarea, position near the field but not at the very bottom
+      // Position it just below where the text cursor would be
+      baseRect = {
+        top: fieldRect.top + 20, // Approximate line height
+        bottom: fieldRect.top + 40,
+        left: fieldRect.left + 10,
+        right: fieldRect.right - 10,
+        width: fieldRect.width - 20,
+        height: 20
+      };
     }
 
     // Base coordinates in the selection's own browsing context (could be inside an iframe)
@@ -510,10 +522,17 @@ class SelectionPopup {
       }
     }
 
-    // Clamp vertically within the field's viewport box so it doesn't drift too far
-    const maxTop = Math.min(fieldRect.bottom - 8, window.innerHeight - 8);
-    const minTop = Math.max(fieldRect.top + 8, 8);
-    top = Math.max(minTop, Math.min(top, maxTop));
+    // Simple clamping to keep on screen - don't restrict to field bounds
+    // This allows the button to appear below the selection even if selection is at top of field
+    const popupHeight = this.element.offsetHeight || 48;
+    
+    // If it would go off bottom of screen, position above the selection instead
+    if (top + popupHeight > window.innerHeight - 8) {
+      top = baseRect.top - popupHeight - 6;
+    }
+    
+    // Keep on screen (but don't clamp to field bounds)
+    top = Math.max(8, Math.min(top, window.innerHeight - popupHeight - 8));
 
     // Apply coordinates (fixed relative to the viewport of top window)
     this.element.style.top = `${Math.round(top)}px`;
