@@ -165,14 +165,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'generateContent': {
       if (request.task === 'textAssist' || request.task === 'youtubeSummary') {
         // Handle text assist and YouTube summary requests directly in background
-        console.log('?? Background: Handling', request.task, 'request');
+        console.log('📥 Background: Handling', request.task, 'request');
         handleTextAssist(request.prompt)
-          .then(result => {
-            console.log('? Background:', request.task, 'successful');
-            sendResponse({ result });
+          .then(response => {
+            console.log('✅ Background:', request.task, 'successful');
+            sendResponse({ result: response.result, provider: response.provider });
           })
           .catch(error => {
-            console.error('? Background:', request.task, 'error:', error);
+            console.error('❌ Background:', request.task, 'error:', error);
             sendResponse({ error: error.message });
           });
         return true; // Keep message channel open for async response
@@ -189,12 +189,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // Handle rewrite text requests using AI Provider Manager
       console.log('🔄 Background: Handling rewriteText request');
       handleRewriteText(request.text, request.options)
-        .then(result => {
+        .then(response => {
           console.log('✅ Background: rewriteText successful');
-          sendResponse({ result });
+          sendResponse({ result: response.result, provider: response.provider });
         })
         .catch(error => {
           console.error('❌ Background: rewriteText error:', error);
+          sendResponse({ error: error.message });
+        });
+      return true; // Keep message channel open for async response
+    }
+
+    case 'translateText': {
+      // Handle translate text requests using AI Provider Manager
+      console.log('🌐 Background: Handling translateText request');
+      handleTranslateText(request.text)
+        .then(response => {
+          console.log('✅ Background: translateText successful');
+          sendResponse({ result: response.result, provider: response.provider });
+        })
+        .catch(error => {
+          console.error('❌ Background: translateText error:', error);
           sendResponse({ error: error.message });
         });
       return true; // Keep message channel open for async response
@@ -326,6 +341,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true; // Async response
     }
 
+    case 'updateApiKey': {
+      // Handle API key updates - reinitialize cloud provider
+      console.log('🔑 Background: Updating API key');
+      initializeProviderManager()
+        .then(async (manager) => {
+          const cloudProvider = manager.providers.get('cloud');
+          if (cloudProvider) {
+            await cloudProvider.setAPIKey(request.apiKey);
+            console.log('✅ Background: Cloud provider reinitialized with new API key');
+          }
+          sendResponse({ success: true });
+        })
+        .catch(error => {
+          console.error('❌ Background: Error updating API key:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Async response
+    }
+
     default:
       return false;
   }
@@ -401,6 +435,7 @@ async function handleTextAssist(prompt) {
     const response = await manager.generateContent(prompt);
 
     console.log('✅ Background: Text assist completed via', response?.provider);
+    console.log('🤖 AI Provider Used:', response?.provider === 'builtin' ? '🔷 Built-in AI (Prompt API)' : '☁️ Cloud AI (Gemini API)');
     console.log('📦 Background: Response structure:', {
       hasResponse: !!response,
       hasData: !!response?.data,
@@ -413,7 +448,7 @@ async function handleTextAssist(prompt) {
       throw new Error('Invalid response from AI provider: missing data');
     }
 
-    return response.data;
+    return { result: response.data, provider: response.provider };
   } catch (error) {
     console.error('❌ Text assist error:', error);
     throw error;
@@ -437,15 +472,108 @@ async function handleRewriteText(text, options = {}) {
     const response = await manager.rewriteText(text, options);
 
     console.log('✅ Background: Rewrite completed via', response?.provider);
+    console.log('🤖 AI Provider Used:', response?.provider === 'builtin' ? '🔷 Built-in AI (Rewriter API)' : '☁️ Cloud AI (Gemini API)');
 
     // Return the data (unwrap from normalized response)
     if (!response || !response.data) {
       throw new Error('Invalid response from AI provider: missing data');
     }
 
-    return response.data;
+    return { result: response.data, provider: response.provider };
   } catch (error) {
     console.error('❌ Text assist error:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    throw error;
+  }
+}
+
+// Handle translate text requests using AI Provider Manager
+async function handleTranslateText(text) {
+  try {
+    // Ensure provider manager is initialized
+    const manager = await initializeProviderManager();
+
+    console.log('🌐 Background: Processing translation using AI Provider Manager');
+    console.log('🌐 Background: Active provider:', manager.getActiveProvider());
+    console.log('🌐 Background: Text length:', text?.length, 'chars');
+
+    // Get user's translation language from storage
+    const data = await chrome.storage.local.get(['targetLanguage']);
+    const langCode = data.targetLanguage || 'es';
+    console.log('🌐 Background: Target language code:', langCode);
+
+    // Map language codes to full names
+    const languageNames = {
+      'en': 'English',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German',
+      'zh': 'Chinese',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'pt': 'Portuguese',
+      'ru': 'Russian',
+      'ar': 'Arabic',
+      'hi': 'Hindi',
+      'it': 'Italian'
+    };
+
+    const targetLang = languageNames[langCode] || 'Spanish';
+    console.log('🌐 Background: Target language name:', targetLang);
+
+    // Better language detection - check if majority is ASCII
+    const asciiChars = text.replace(/[^a-zA-Z]/g, '').length;
+    const totalChars = text.replace(/[^a-zA-Z\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff]/g, '').length;
+    const isEnglish = totalChars > 0 && (asciiChars / totalChars) > 0.7;
+
+    console.log('🌐 Background: Is English:', isEnglish, `(${asciiChars}/${totalChars} ASCII chars)`);
+
+    let prompt;
+    if (isEnglish && langCode !== 'en') {
+      // English to target language
+      prompt = `Translate this English text to ${targetLang}. Return ONLY the translated text, no explanations:
+
+${text}
+
+Translated:`;
+    } else if (!isEnglish && langCode === 'en') {
+      // Non-English to English
+      prompt = `Translate this text to English. Return ONLY the translated text, no explanations:
+
+${text}
+
+Translated:`;
+    } else if (!isEnglish && langCode !== 'en') {
+      // Non-English to another language
+      prompt = `Translate this text to ${targetLang}. Return ONLY the translated text, no explanations:
+
+${text}
+
+Translated:`;
+    } else {
+      // English to English - just return as is
+      const activeProvider = manager.getActiveProvider();
+      return { result: text, provider: activeProvider };
+    }
+
+    console.log('🌐 Background: Translation prompt created, length:', prompt.length);
+
+    // Use provider manager to generate translation
+    const response = await manager.generateContent(prompt);
+
+    console.log('✅ Background: Translation completed via', response?.provider);
+    console.log('🤖 AI Provider Used:', response?.provider === 'builtin' ? '🔷 Built-in AI (Translator/Prompt API)' : '☁️ Cloud AI (Gemini API)');
+
+    // Return the data (unwrap from normalized response)
+    if (!response || !response.data) {
+      throw new Error('Invalid response from AI provider: missing data');
+    }
+
+    return { result: response.data.trim(), provider: response.provider };
+  } catch (error) {
+    console.error('❌ Translation error:', error);
     console.error('❌ Error name:', error.name);
     console.error('❌ Error message:', error.message);
     console.error('❌ Error stack:', error.stack);

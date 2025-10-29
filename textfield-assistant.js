@@ -1143,6 +1143,8 @@ class AIServices {
   }
 
   async fixGrammar(text) {
+    console.log('✓ Starting grammar fix for text:', text.substring(0, 50) + '...');
+    
     const prompt = `Fix grammar and spelling errors in this text. Return ONLY the corrected text, no explanations, no options, no numbering:
 
 ${text}
@@ -1152,6 +1154,14 @@ Corrected version:`;
   }
 
   async rewriteTone(text, tone) {
+    const toneLabels = {
+      clear: '💡 Clear',
+      casual: '😊 Casual',
+      formal: '👔 Formal',
+      concise: '✂️ Shorter'
+    };
+    console.log(`${toneLabels[tone] || tone} Starting tone rewrite for text:`, text.substring(0, 50) + '...');
+    
     const prompts = {
       clear: `Rewrite this to be clearer. Return ONLY the rewritten text, no explanations:
 
@@ -1206,7 +1216,10 @@ Concise version:`
         }
         
         if (response?.result) {
-          console.log('✅ Rephrase successful');
+          // Log which provider was used
+          const provider = response.provider || 'unknown';
+          console.log(`✅ Rephrase successful using: ${provider.toUpperCase()}`);
+          console.log(`🤖 AI Provider: ${provider === 'builtin' ? '🔷 Built-in AI (Rewriter API)' : '☁️ Cloud AI (Gemini API)'}`);
           resolve(response.result);
         } else if (response?.error) {
           console.error('❌ Rephrase error:', response.error);
@@ -1226,74 +1239,33 @@ Concise version:`
       throw new Error('No text provided for translation');
     }
     
-    // Get user's translation language from storage
+    // Send translation request to background script
+    // Background script will handle storage access and AI provider routing
     return new Promise((resolve, reject) => {
-      chrome.storage.local.get(['targetLanguage'], async (data) => {
-        const langCode = data.targetLanguage || 'es';
-        console.log('🌐 Target language code:', langCode);
+      chrome.runtime.sendMessage({
+        action: 'translateText',
+        text: text
+      }, (response) => {
+        console.log('🌐 Received translation response:', response);
         
-        // Map language codes to full names
-        const languageNames = {
-          'en': 'English',
-          'es': 'Spanish',
-          'fr': 'French',
-          'de': 'German',
-          'zh': 'Chinese',
-          'ja': 'Japanese',
-          'ko': 'Korean',
-          'pt': 'Portuguese',
-          'ru': 'Russian',
-          'ar': 'Arabic',
-          'hi': 'Hindi',
-          'it': 'Italian'
-        };
-        
-        const targetLang = languageNames[langCode] || 'Spanish';
-        console.log('🌐 Target language name:', targetLang);
-        
-        // Better language detection - check if majority is ASCII
-        const asciiChars = text.replace(/[^a-zA-Z]/g, '').length;
-        const totalChars = text.replace(/[^a-zA-Z\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff]/g, '').length;
-        const isEnglish = totalChars > 0 && (asciiChars / totalChars) > 0.7;
-        
-        console.log('🌐 Is English:', isEnglish, `(${asciiChars}/${totalChars} ASCII chars)`);
-        
-        let prompt;
-        if (isEnglish && langCode !== 'en') {
-          // English to target language
-          prompt = `Translate this English text to ${targetLang}. Return ONLY the translated text, no explanations:
-
-${text}
-
-Translated:`;
-        } else if (!isEnglish && langCode === 'en') {
-          // Non-English to English (but user wants English, so no translation needed)
-          prompt = `Translate this text to English. Return ONLY the translated text, no explanations:
-
-${text}
-
-Translated:`;
-        } else if (!isEnglish && langCode !== 'en') {
-          // Non-English to another language - translate to English first, then to target
-          prompt = `Translate this text to ${targetLang}. Return ONLY the translated text, no explanations:
-
-${text}
-
-Translated:`;
-        } else {
-          // English to English - shouldn't happen, just return as is
-          return Promise.resolve(text);
+        if (chrome.runtime.lastError) {
+          console.error('❌ Chrome runtime error:', chrome.runtime.lastError);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
         }
         
-        console.log('🌐 Translation prompt created, length:', prompt.length);
-        
-        try {
-          const result = await this.callAI(prompt, null); // Don't cache translations
-          console.log('✅ Translation result:', result.substring(0, 50) + '...');
-          resolve(result.trim());
-        } catch (error) {
-          console.error('❌ Translation error:', error);
-          reject(error);
+        if (response?.result) {
+          // Log which provider was used
+          const provider = response.provider || 'unknown';
+          console.log(`✅ Translation successful using: ${provider.toUpperCase()}`);
+          console.log(`🤖 AI Provider: ${provider === 'builtin' ? '🔷 Built-in AI (Translator API)' : '☁️ Cloud AI (Gemini API)'}`);
+          resolve(response.result);
+        } else if (response?.error) {
+          console.error('❌ Translation error:', response.error);
+          reject(new Error(response.error));
+        } else {
+          console.error('❌ No result in response');
+          reject(new Error('Translation failed - no result returned'));
         }
       });
     });
@@ -1302,11 +1274,11 @@ Translated:`;
   async callAI(prompt, cacheKey = null) {
     // Check cache
     if (cacheKey && this.cache.has(prompt)) {
-      console.log('\u2705 Using cached response');
+      console.log('✅ Using cached response');
       return this.cache.get(prompt);
     }
 
-    console.log('\ud83d\udce4 Sending AI request:', { action: 'generateContent', task: 'textAssist' });
+    console.log('📤 Sending AI request:', { action: 'generateContent', task: 'textAssist' });
     
     // Send to background script to call Google AI
     return new Promise((resolve, reject) => {
@@ -1315,26 +1287,30 @@ Translated:`;
         task: 'textAssist',
         prompt: prompt
       }, (response) => {
-        console.log('\ud83d\udce5 Received response:', response);
+        console.log('📥 Received response:', response);
         
         if (chrome.runtime.lastError) {
-          console.error('\u274c Chrome runtime error:', chrome.runtime.lastError);
+          console.error('❌ Chrome runtime error:', chrome.runtime.lastError);
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
         
         if (response?.result) {
-          console.log('\u2705 AI response successful');
+          // Log which provider was used
+          const provider = response.provider || 'unknown';
+          console.log(`✅ AI response successful using: ${provider.toUpperCase()}`);
+          console.log(`🤖 AI Provider: ${provider === 'builtin' ? '🔷 Built-in AI (Prompt API)' : '☁️ Cloud AI (Gemini API)'}`);
+          
           // Cache result as-is
           if (cacheKey) {
             this.cache.set(prompt, response.result);
           }
           resolve(response.result);
         } else if (response?.error) {
-          console.error('\u274c API error:', response.error);
+          console.error('❌ API error:', response.error);
           reject(new Error(response.error));
         } else {
-          console.error('\u274c No result in response');
+          console.error('❌ No result in response');
           reject(new Error('AI call failed - no result returned'));
         }
       });

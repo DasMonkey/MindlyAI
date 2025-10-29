@@ -1493,6 +1493,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'updateTTSState') {
     // Update TTS control button state
     updateTTSControlButton(request.state);
+  } else if (request.action === 'refreshProviderState') {
+    // Refresh provider state - update local state if needed
+    console.log('🔄 Provider state refreshed:', request.provider, 'API key:', request.apiKey ? 'configured' : 'not configured');
+    // Content scripts can now use the updated state
+    // This ensures they're in sync with sidepanel settings
   }
   // Don't return true for fire-and-forget messages
 });

@@ -447,6 +447,9 @@ async function handleProviderChange(event) {
   // Update UI
   updateProviderSelection(provider);
   
+  // Refresh content scripts to sync state
+  await refreshContentScripts();
+  
   console.log(`✅ Provider switched to: ${provider}`);
 }
 
@@ -455,6 +458,32 @@ function updateProviderSelection(provider) {
   // Update selected class
   document.getElementById('builtinProvider')?.classList.toggle('selected', provider === 'builtin');
   document.getElementById('cloudProvider')?.classList.toggle('selected', provider === 'cloud');
+}
+
+// Refresh content scripts to sync state with sidepanel
+async function refreshContentScripts() {
+  try {
+    // Get all tabs
+    const tabs = await chrome.tabs.query({});
+    
+    // Send refresh message to all content scripts
+    for (const tab of tabs) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, { 
+          action: 'refreshProviderState',
+          apiKey: apiKey,
+          provider: sidePanelProviderManager?.getActiveProvider() || 'builtin'
+        });
+      } catch (error) {
+        // Ignore errors for tabs without content scripts
+        console.log(`Could not refresh tab ${tab.id}:`, error.message);
+      }
+    }
+    
+    console.log('✅ Content scripts refreshed');
+  } catch (error) {
+    console.error('❌ Error refreshing content scripts:', error);
+  }
 }
 
 // Update provider status indicators
@@ -710,17 +739,42 @@ async function updateCloudAPIDashboard() {
 }
 
 // Save API Key
-function saveApiKey() {
+async function saveApiKey() {
   const key = document.getElementById('apiKey').value.trim();
   if (!key) {
     alert('Please enter an API key');
     return;
   }
 
-  chrome.storage.local.set({ geminiApiKey: key }, () => {
+  chrome.storage.local.set({ geminiApiKey: key }, async () => {
     apiKey = key;
     checkApiStatus();
-    updateProviderStatus(); // Update provider status after saving key
+    
+    // Reinitialize cloud provider with new API key in sidepanel
+    if (sidePanelProviderManager) {
+      const cloudProvider = sidePanelProviderManager.providers.get('cloud');
+      if (cloudProvider) {
+        await cloudProvider.setAPIKey(key);
+        console.log('✅ Sidepanel: Cloud provider reinitialized with new API key');
+      }
+    }
+    
+    // Also update background provider manager
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'updateApiKey',
+        apiKey: key
+      });
+      console.log('✅ Background: Cloud provider notified of API key update');
+    } catch (error) {
+      console.warn('Could not update background provider:', error);
+    }
+    
+    // Update provider status after saving key
+    await updateProviderStatus();
+    
+    // Refresh content scripts to sync state
+    await refreshContentScripts();
     
     // Show remove button
     document.getElementById('removeApiKey').style.display = 'inline-block';
@@ -730,16 +784,41 @@ function saveApiKey() {
 }
 
 // Remove API Key
-function removeApiKey() {
+async function removeApiKey() {
   if (!confirm('Are you sure you want to remove the API key?\n\nCloud AI features will not work without an API key.')) {
     return;
   }
 
-  chrome.storage.local.remove('geminiApiKey', () => {
+  chrome.storage.local.remove('geminiApiKey', async () => {
     apiKey = null;
     document.getElementById('apiKey').value = '';
     checkApiStatus();
-    updateProviderStatus(); // Update provider status after removing key
+    
+    // Reinitialize cloud provider with null API key in sidepanel
+    if (sidePanelProviderManager) {
+      const cloudProvider = sidePanelProviderManager.providers.get('cloud');
+      if (cloudProvider) {
+        await cloudProvider.setAPIKey(null);
+        console.log('✅ Sidepanel: Cloud provider reinitialized with no API key');
+      }
+    }
+    
+    // Also update background provider manager
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'updateApiKey',
+        apiKey: null
+      });
+      console.log('✅ Background: Cloud provider notified of API key removal');
+    } catch (error) {
+      console.warn('Could not update background provider:', error);
+    }
+    
+    // Update provider status after removing key
+    await updateProviderStatus();
+    
+    // Refresh content scripts to sync state
+    await refreshContentScripts();
     
     // Hide remove button
     document.getElementById('removeApiKey').style.display = 'none';
