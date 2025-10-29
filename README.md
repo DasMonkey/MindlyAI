@@ -1,14 +1,14 @@
 # Mentelo - AI Content Assistant Chrome Extension
 
-A powerful Chrome extension powered by Google Gemini AI that provides intelligent assistance for writing, reading, and browsing the web.
+A powerful Chrome extension that combines Chrome's Built-in AI (Gemini Nano) with Cloud AI fallback, providing intelligent assistance for writing, reading, and browsing the web with privacy-first, offline-capable features.
 
 ## ✨ Features
 
 ### 🎯 Core Features
 - **✨ Text Field Assistant**: Grammarly-like AI writing assistant on any text field
-- **📝 Grammar Checker**: Real-time grammar and spelling corrections with visual feedback
-- **📄 Page Summarization**: Get AI-powered summaries of any webpage
-- **🌐 Translation**: Translate entire pages or selected text with HTML preservation
+- **📝 Grammar Checker**: Real-time grammar and spelling corrections with visual feedback (Built-in AI Proofreader API)
+- **📄 Page Summarization**: Get AI-powered summaries of any webpage (Built-in AI Summarizer)
+- **🌐 Translation**: Translate entire pages or selected text with HTML preservation (Built-in AI Translator)
 - **🎤 Call Mindy**: Voice AI assistant with real-time conversation
 - **💬 Chat with Page**: Context-aware chat about any webpage
 - **🔊 Text to Speech**: Listen to selected text with voice control
@@ -18,13 +18,35 @@ A powerful Chrome extension powered by Google Gemini AI that provides intelligen
 - **📄 PDF OCR**: Extract and analyze text from PDF documents
 - **🖼️ Image Analysis**: Extract text from images and get detailed explanations
 
+### 🔒 Privacy-First Hybrid AI Architecture
+- **Built-in AI (Gemini Nano)**: Runs locally on your device for grammar checking, translation, and summarization - no data leaves your browser
+- **Cloud AI Fallback**: Seamlessly switches to Gemini API when Built-in AI is unavailable
+- **Smart Provider Selection**: Automatically chooses the best AI provider based on availability and task requirements
+- **Offline Capable**: Core features work without internet when Built-in AI is available
+
 ## 🚀 Installation
 
-### Step 1: Get a Gemini API Key
+### Prerequisites
+- **Chrome Browser**: Version 127+ (for Built-in AI support)
+- **Chrome Flags** (for Built-in AI features):
+  1. Navigate to `chrome://flags`
+  2. Enable these flags:
+     - `#optimization-guide-on-device-model` → Enabled BypassPerfRequirement
+     - `#text-safety-classifier` → Enabled
+     - `#summarization-api-for-gemini-nano` → Enabled
+     - `#translation-api` → Enabled
+     - `#rewriter-api` → Enabled
+     - `#writer-api` → Enabled
+  3. Restart Chrome
+  4. Wait for Gemini Nano to download (check `chrome://components`)
+
+### Step 1: Get a Gemini API Key (Optional - for Cloud AI fallback)
 1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Sign in with your Google account
 3. Click "Create API Key"
 4. Copy your API key (keep it secure!)
+
+**Note**: The extension works with Built-in AI without an API key, but having one enables cloud fallback for advanced features.
 
 ### Step 2: Install the Extension
 1. Download or clone this repository
@@ -36,9 +58,16 @@ A powerful Chrome extension powered by Google Gemini AI that provides intelligen
 
 ### Step 3: Configure the Extension
 1. Click the extension icon in the toolbar to open the side panel
-2. Paste your Gemini API key in the setup section
-3. Click "Save API Key"
-4. You're ready to go! ✅
+2. Check the AI Provider Status to see which features are available
+3. (Optional) Paste your Gemini API key for cloud fallback features
+4. Click "Save API Key"
+5. You're ready to go! ✅
+
+### AI Provider Status
+The extension shows real-time status of available AI providers:
+- **🟢 Built-in AI Available**: Features run locally on your device
+- **🟡 Cloud AI Available**: Features use Gemini API (requires API key)
+- **🔴 Unavailable**: Feature not accessible (check Chrome flags or API key)
 
 ## 📖 How to Use
 
@@ -65,7 +94,7 @@ Your AI-powered writing companion that appears on any text field:
 - ✅ Keyboard shortcuts (Esc to close)
 
 ### 📝 Grammar Checker
-Real-time grammar and spelling corrections as you type:
+Real-time grammar and spelling corrections as you type using Chrome's Built-in Proofreader API:
 
 **How it works:**
 1. Type in any text field
@@ -74,11 +103,12 @@ Real-time grammar and spelling corrections as you type:
 4. Click "Apply" to fix instantly
 
 **Features:**
-- ✅ Automatic error detection
+- ✅ Automatic error detection using Built-in AI (runs locally)
 - ✅ Visual feedback with underlines
 - ✅ Hover suggestions with explanations
 - ✅ One-click corrections
-- ✅ Smart caching to minimize API calls
+- ✅ Privacy-first: No data sent to cloud
+- ✅ Works offline when Built-in AI is available
 
 ### 🎤 Call Mindy - Voice AI Assistant
 Have natural voice conversations with AI about any webpage:
@@ -251,11 +281,17 @@ Right-click on images to:
 
 ### Built With
 - **Manifest V3**: Latest Chrome extension standard
-- **Google Gemini API**: 
+- **Chrome Built-in AI APIs**:
+  - Proofreader API (grammar checking)
+  - Translator API (translation)
+  - Summarizer API (summarization)
+  - Rewriter API (text rewriting)
+  - Writer API (content generation)
+- **Google Gemini API** (Cloud fallback):
   - Gemini 2.5 Flash (general tasks and TTS)
   - Gemini 2.5 Flash Native Audio (voice conversations - Mindy)
   - Gemini 2.0 Flash (legacy general tasks)
-  - Gemini Flash Lite (grammar checking)
+  - Gemini Flash Lite (grammar checking fallback)
 - **Vanilla JavaScript**: No frameworks, fast and lightweight
 - **Modern CSS**: Gradient backgrounds, smooth animations
 - **Web Audio API**: For voice capture and playback
@@ -382,23 +418,34 @@ Automatically groups bookmarks by:
 
 ## 🔒 Privacy & Security
 
+- ✅ **Built-in AI runs locally**: Grammar checking, translation, and summarization happen on your device
+- ✅ **No data leaves your browser** when using Built-in AI features
 - ✅ Your API key is stored locally in Chrome storage
-- ✅ No data is sent to third-party servers (except Google Gemini API)
-- ✅ All processing happens in your browser
-- ✅ Bookmarks and history are stored locally
+- ✅ Cloud AI only used when Built-in AI is unavailable or for advanced features
+- ✅ All bookmarks and history are stored locally
+- ✅ Transparent provider status: Always know which AI is being used
 
 ## 🐛 Troubleshooting
+
+### Built-in AI Not Available
+- Check Chrome version (127+ required)
+- Verify Chrome flags are enabled (see Installation)
+- Check `chrome://components` for Gemini Nano download status
+- Restart Chrome after enabling flags
+- Wait for model download to complete (can take several minutes)
 
 ### API Key Issues
 - Make sure your API key is valid
 - Check if you have API quota remaining
 - Verify the key is correctly copied (no extra spaces)
+- Built-in AI features work without an API key
 
 ### Extension Not Working
 - Refresh the page after installation
 - Check browser console for errors (F12)
 - Ensure "Developer mode" is enabled
 - Try reinstalling the extension
+- Check AI Provider Status in the side panel
 
 ### Popup Not Appearing
 - Check if the page allows content scripts
@@ -426,11 +473,31 @@ Planned features:
 
 ## 🤝 Contributing
 
-Feel free to submit issues and enhancement requests!
+Contributions are welcome! Feel free to:
+- Submit bug reports and feature requests via GitHub Issues
+- Fork the repository and submit Pull Requests
+- Improve documentation
+- Share feedback and suggestions
+
+Please follow standard coding practices and include clear commit messages.
 
 ## 📄 License
 
-This project is for educational and personal use. Respect Google's API terms of service.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+Copyright 2024 Mentelo
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ## 🙏 Acknowledgments
 
