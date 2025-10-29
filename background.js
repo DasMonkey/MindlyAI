@@ -232,15 +232,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 'fetchTranscript': {
       // Fetch YouTube transcript to avoid CORS issues
-      console.log('?? Background: Fetching transcript from:', request.url);
+      console.log('📥 Background: Fetching transcript from:', request.url);
       fetch(request.url)
         .then(response => response.text())
         .then(data => {
-          console.log('? Background: Transcript fetched, length:', data.length);
+          console.log('✅ Background: Transcript fetched, length:', data.length);
           sendResponse({ success: true, data });
         })
         .catch(error => {
-          console.error('? Background: Transcript fetch error:', error);
+          console.error('❌ Background: Transcript fetch error:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Keep message channel open for async response
+    }
+
+    case 'fetchImage': {
+      // Fetch image to avoid CORS issues
+      console.log('🖼️ Background: Fetching image from:', request.url);
+      fetch(request.url)
+        .then(response => response.blob())
+        .then(blob => {
+          // Convert blob to base64
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Data = reader.result.split(',')[1];
+            const mimeType = blob.type || 'image/jpeg';
+            console.log('✅ Background: Image fetched successfully');
+            console.log('📊 MIME type:', mimeType);
+            console.log('📊 Base64 length:', base64Data?.length);
+            sendResponse({ 
+              success: true, 
+              base64Data: base64Data,
+              mimeType: mimeType
+            });
+          };
+          reader.onerror = (error) => {
+            console.error('❌ Background: Error converting image to base64:', error);
+            sendResponse({ success: false, error: 'Failed to convert image to base64' });
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(error => {
+          console.error('❌ Background: Image fetch error:', error);
           sendResponse({ success: false, error: error.message });
         });
       return true; // Keep message channel open for async response

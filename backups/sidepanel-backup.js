@@ -3,88 +3,6 @@ let currentTask = null;
 let apiKey = null;
 let pageContent = null;
 let chatHistory = [];
-
-// AI Provider Manager (initialized on load)
-let sidePanelProviderManager = null;
-
-// Initialize AI Provider Manager for sidepanel
-async function initializeSidePanelProviderManager() {
-  // If manager already exists, refresh its provider from storage
-  if (sidePanelProviderManager) {
-    try {
-      const result = await chrome.storage.local.get(['preferredProvider']);
-      const preferredProvider = result.preferredProvider || 'builtin';
-      const currentProvider = sidePanelProviderManager.getActiveProvider();
-      
-      // Only update if provider has changed
-      if (currentProvider !== preferredProvider) {
-        console.log(`🔄 Refreshing provider from ${currentProvider} to ${preferredProvider}`);
-        await sidePanelProviderManager.setProvider(preferredProvider);
-        sidePanelProviderManager.activeProvider = preferredProvider;
-      }
-    } catch (error) {
-      console.warn('⚠️ Could not refresh provider:', error);
-    }
-    return sidePanelProviderManager;
-  }
-  
-  try {
-    // Create provider instances
-    const builtinProvider = new BuiltInAIProvider();
-    const cloudProvider = new CloudAIProvider();
-    
-    // Initialize providers
-    await builtinProvider.initialize();
-    await cloudProvider.initialize();
-    
-    // Create and initialize manager
-    sidePanelProviderManager = new AIProviderManager();
-    await sidePanelProviderManager.initialize();
-    
-    // Register providers
-    sidePanelProviderManager.registerProvider('builtin', builtinProvider);
-    sidePanelProviderManager.registerProvider('cloud', cloudProvider);
-    
-    // Load saved provider preference and set it
-    const result = await chrome.storage.local.get(['preferredProvider']);
-    const preferredProvider = result.preferredProvider || 'builtin';
-    
-    await sidePanelProviderManager.setProvider(preferredProvider);
-    // Force set activeProvider to ensure it's set
-    sidePanelProviderManager.activeProvider = preferredProvider;
-    
-    console.log('✅ AI Provider Manager initialized in sidepanel');
-    console.log(`✅ Active provider set to: ${preferredProvider}`);
-    console.log(`✅ Active provider confirmed: ${sidePanelProviderManager.getActiveProvider()}`);
-    
-    return sidePanelProviderManager;
-  } catch (error) {
-    console.error('❌ Error initializing sidepanel provider manager:', error);
-    throw error;
-  }
-}
-
-// Initialize provider status badge in sidepanel
-let providerStatusUI = null;
-let providerBadge = null;
-
-async function initializeProviderBadge() {
-  try {
-    if (typeof ProviderStatusUI === 'undefined') {
-      console.warn('⚠️ ProviderStatusUI not available');
-      return;
-    }
-
-    // Create provider status UI instance
-    providerStatusUI = new ProviderStatusUI();
-    await providerStatusUI.initialize(sidePanelProviderManager);
-
-    // Badge removed - no longer showing in header
-    console.log('✅ Provider status UI initialized (badge disabled)');
-  } catch (error) {
-    console.error('❌ Error initializing provider status UI:', error);
-  }
-}
 // Track whether the user has interacted via chat or Mindy
 let sessionActivity = {
   hasInteraction: false,
@@ -191,9 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadClipboardHistory();
   await loadPDFModeFromStorage();
   await loadUserAccount();
-  await initializeProviderSettings(); // Initialize AI provider settings
-  await initializeSidePanelProviderManager(); // Initialize AI Provider Manager
-  await initializeProviderBadge(); // Initialize provider status badge
   setupEventListeners();
   checkApiStatus();
   startClipboardMonitoring();
@@ -207,11 +122,6 @@ async function loadApiKey() {
       apiKey = result.geminiApiKey || null;
       if (apiKey) {
         document.getElementById('apiKey').value = apiKey;
-        // Show remove button if API key exists
-        document.getElementById('removeApiKey').style.display = 'inline-block';
-      } else {
-        // Hide remove button if no API key
-        document.getElementById('removeApiKey').style.display = 'none';
       }
       resolve();
     });
@@ -236,9 +146,6 @@ function checkApiStatus() {
 function setupEventListeners() {
   // Save API Key
   document.getElementById('saveApiKey').addEventListener('click', saveApiKey);
-  
-  // Remove API Key
-  document.getElementById('removeApiKey').addEventListener('click', removeApiKey);
 
   // Save language preference
   document.getElementById('saveLanguage').addEventListener('click', saveLanguagePreference);
@@ -293,26 +200,6 @@ function setupEventListeners() {
   document.getElementById('mindyNewSessionBtn').addEventListener('click', startFreshMindySession);
   document.getElementById('mindyMuteBtn').addEventListener('click', toggleMindyMute);
   document.getElementById('mindyEndBtn').addEventListener('click', endMindyCall);
-  
-  // Open Built-in AI Test Page
-  const openTestPageBtn = document.getElementById('openTestPageBtn');
-  if (openTestPageBtn) {
-    openTestPageBtn.addEventListener('click', () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('test-builtin-ai-complete.html') });
-    });
-  }
-
-  // Provider dashboard refresh
-  const refreshBtn = document.getElementById('refreshProviderStatus');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', async () => {
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = '🔄 Refreshing...';
-      await updateProviderDashboard();
-      refreshBtn.disabled = false;
-      refreshBtn.textContent = '🔄 Refresh Status';
-    });
-  }
 }
 
 // Listen for tab activation changes
@@ -340,12 +227,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'generateContent') {
-    // Ignore textAssist and youtubeSummary tasks - they're handled in background.js
-    if (request.task === 'textAssist' || request.task === 'youtubeSummary') {
+    // Ignore textAssist tasks - they're handled in background.js
+    if (request.task === 'textAssist') {
       return;
     }
     currentTask = request;
-    switchTab('generate'); // Switch to generate tab to show the results
     displayCurrentTask();
     generateContent(request);
   } else if (request.action === 'switchToChat') {
@@ -398,486 +284,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Don't return true for other messages - these are fire-and-forget
 });
 
-// ==================== AI PROVIDER SETTINGS ====================
-
-// Initialize provider settings
-async function initializeProviderSettings() {
-  // Load saved provider preference
-  const result = await chrome.storage.local.get(['preferredProvider']);
-  const preferredProvider = result.preferredProvider || 'builtin';
-  
-  // Set radio button
-  const radio = document.getElementById(preferredProvider === 'builtin' ? 'builtinRadio' : 'cloudRadio');
-  if (radio) {
-    radio.checked = true;
-    updateProviderSelection(preferredProvider);
-  }
-  
-  // IMPORTANT: Set the active provider in the provider manager
-  if (sidePanelProviderManager) {
-    try {
-      await sidePanelProviderManager.setProvider(preferredProvider);
-      // Force set activeProvider to ensure it's set
-      sidePanelProviderManager.activeProvider = preferredProvider;
-      console.log(`✅ Provider manager initialized with: ${preferredProvider}`);
-      console.log(`✅ Active provider confirmed: ${sidePanelProviderManager.getActiveProvider()}`);
-    } catch (error) {
-      console.error('Error setting initial provider:', error);
-    }
-  }
-  
-  // Check provider availability
-  await updateProviderStatus();
-  
-  // Setup event listeners
-  document.getElementById('builtinRadio')?.addEventListener('change', handleProviderChange);
-  document.getElementById('cloudRadio')?.addEventListener('change', handleProviderChange);
-  
-  // Make provider options clickable
-  document.getElementById('builtinProvider')?.addEventListener('click', () => {
-    document.getElementById('builtinRadio').checked = true;
-    handleProviderChange({ target: document.getElementById('builtinRadio') });
-  });
-  
-  document.getElementById('cloudProvider')?.addEventListener('click', () => {
-    document.getElementById('cloudRadio').checked = true;
-    handleProviderChange({ target: document.getElementById('cloudRadio') });
-  });
-}
-
-// Handle provider selection change
-async function handleProviderChange(event) {
-  const provider = event.target.value;
-  
-  // Reload API key to ensure we have the latest value
-  await loadApiKey();
-  
-  // Check if Cloud AI is selected but API key is not configured
-  if (provider === 'cloud' && !apiKey) {
-    alert('⚠️ Cloud AI requires a Gemini API key.\n\nPlease configure your API key in Settings first, or use Built-in AI which works without an API key.');
-    
-    // Revert to Built-in AI
-    const builtinRadio = document.getElementById('builtinRadio');
-    if (builtinRadio) {
-      builtinRadio.checked = true;
-      updateProviderSelection('builtin');
-    }
-    return;
-  }
-  
-  // Save preference (for backward compatibility)
-  await chrome.storage.local.set({ preferredProvider: provider });
-  
-  // Update sidepanel provider manager - force reload settings and set provider
-  if (sidePanelProviderManager) {
-    try {
-      // Reload settings from storage first
-      await sidePanelProviderManager.loadSettings();
-      // Then set the provider
-      await sidePanelProviderManager.setProvider(provider);
-      // Force set activeProvider to ensure it's updated
-      sidePanelProviderManager.activeProvider = provider;
-      console.log(`✅ Sidepanel Provider Manager updated to: ${provider}`);
-      console.log(`✅ Active provider confirmed: ${sidePanelProviderManager.getActiveProvider()}`);
-    } catch (error) {
-      console.error('Error updating sidepanel provider manager:', error);
-    }
-  }
-  
-  // Also update background provider manager via message
-  try {
-    await chrome.runtime.sendMessage({
-      action: 'setProvider',
-      provider: provider
-    });
-  } catch (error) {
-    console.warn('Could not update background provider:', error);
-  }
-  
-  // Update UI
-  updateProviderSelection(provider);
-  
-  // Refresh content scripts to sync state
-  await refreshContentScripts();
-  
-  console.log(`✅ Provider switched to: ${provider}`);
-}
-
-// Update provider selection UI
-function updateProviderSelection(provider) {
-  // Update selected class
-  document.getElementById('builtinProvider')?.classList.toggle('selected', provider === 'builtin');
-  document.getElementById('cloudProvider')?.classList.toggle('selected', provider === 'cloud');
-}
-
-// Refresh content scripts to sync state with sidepanel
-async function refreshContentScripts() {
-  try {
-    // Get all tabs
-    const tabs = await chrome.tabs.query({});
-    
-    // Send refresh message to all content scripts
-    for (const tab of tabs) {
-      try {
-        await chrome.tabs.sendMessage(tab.id, { 
-          action: 'refreshProviderState',
-          apiKey: apiKey,
-          provider: sidePanelProviderManager?.getActiveProvider() || 'builtin'
-        });
-      } catch (error) {
-        // Ignore errors for tabs without content scripts
-        console.log(`Could not refresh tab ${tab.id}:`, error.message);
-      }
-    }
-    
-    console.log('✅ Content scripts refreshed');
-  } catch (error) {
-    console.error('❌ Error refreshing content scripts:', error);
-  }
-}
-
-// Update provider status indicators
-async function updateProviderStatus() {
-  console.log('🔄 Updating provider status...');
-  
-  // Check Built-in AI availability
-  const builtinStatus = document.getElementById('builtinStatusInline') || document.getElementById('builtinStatusCompact');
-  if (builtinStatus) {
-    try {
-      if ('LanguageModel' in self) {
-        const availability = await self.LanguageModel.availability({ outputLanguage: 'en' });
-        console.log('📊 Built-in AI availability:', availability);
-        
-        if (availability === 'readily' || availability === 'available') {
-          builtinStatus.textContent = '✅ Ready';
-          builtinStatus.className = 'provider-status-inline available';
-        } else if (availability === 'after-download' || availability === 'downloadable') {
-          builtinStatus.textContent = '📥 Downloadable';
-          builtinStatus.className = 'provider-status-inline available';
-        } else if (availability === 'downloading') {
-          builtinStatus.textContent = '⏳ Downloading...';
-          builtinStatus.className = 'provider-status-inline';
-        } else {
-          builtinStatus.textContent = '❌ Unavailable';
-          builtinStatus.className = 'provider-status-inline unavailable';
-        }
-      } else {
-        builtinStatus.textContent = '❌ Not supported';
-        builtinStatus.className = 'provider-status-inline unavailable';
-      }
-    } catch (error) {
-      builtinStatus.textContent = '❌ Check failed';
-      builtinStatus.className = 'provider-status-inline unavailable';
-      console.error('Error checking Built-in AI:', error);
-    }
-  } else {
-    console.warn('⚠️ builtinStatusInline/builtinStatusCompact element not found');
-  }
-  
-  // Check Cloud API availability
-  const cloudStatus = document.getElementById('cloudStatusInline') || document.getElementById('cloudStatusCompact');
-  if (cloudStatus) {
-    const result = await chrome.storage.local.get(['geminiApiKey']);
-    const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
-    console.log('📊 Cloud API key configured:', hasApiKey);
-    
-    if (hasApiKey) {
-      cloudStatus.textContent = '✅ Configured';
-      cloudStatus.className = 'provider-status-inline available';
-    } else {
-      cloudStatus.textContent = '⚠️ API key required';
-      cloudStatus.className = 'provider-status-inline unavailable';
-    }
-  } else {
-    console.warn('⚠️ cloudStatusInline/cloudStatusCompact element not found');
-  }
-  
-  console.log('✅ Provider status updated');
-  
-  // Update dashboard if present
-  await updateProviderDashboard();
-}
-
-// Update provider status dashboard
-async function updateProviderDashboard() {
-  try {
-    // Update Built-in AI dashboard
-    await updateBuiltinAIDashboard();
-    
-    // Update Cloud API dashboard
-    await updateCloudAPIDashboard();
-    
-    console.log('✅ Provider dashboard updated');
-  } catch (error) {
-    console.error('❌ Error updating provider dashboard:', error);
-  }
-}
-
-// Update Built-in AI dashboard status
-async function updateBuiltinAIDashboard() {
-  const apis = [
-    { name: 'Proofreader', id: 'builtinProofreaderStatus', check: 'Proofreader' },
-    { name: 'Translator', id: 'builtinTranslatorStatus', check: 'Translator' },
-    { name: 'Summarizer', id: 'builtinSummarizerStatus', check: 'Summarizer' },
-    { name: 'Rewriter', id: 'builtinRewriterStatus', check: 'Rewriter' },
-    { name: 'Writer', id: 'builtinWriterStatus', check: 'Writer' },
-    { name: 'Prompt', id: 'builtinPromptStatus', check: 'LanguageModel' }
-  ];
-  
-  let availableCount = 0;
-  
-  for (const api of apis) {
-    const element = document.getElementById(api.id);
-    if (!element) continue;
-    
-    try {
-      // Check if the API exists in global scope
-      if (api.check in self) {
-        let availability;
-        
-        // Translator API requires language parameters
-        if (api.check === 'Translator') {
-          availability = await self.Translator.availability({
-            sourceLanguage: 'en',
-            targetLanguage: 'es'
-          });
-        } else if (api.check === 'Proofreader') {
-          // Proofreader API requires expectedInputLanguages parameter
-          availability = await self.Proofreader.availability({
-            expectedInputLanguages: ['en']
-          });
-        } else {
-          availability = await self[api.check].availability();
-        }
-        
-        if (availability === 'readily' || availability === 'available') {
-          element.innerHTML = '<span class="status-value available">✅ Available</span>';
-          availableCount++;
-        } else if (availability === 'after-download' || availability === 'downloadable') {
-          element.innerHTML = '<span class="status-value downloading clickable" data-api="' + api.check + '" title="Click to download">📥 Downloadable</span>';
-          // Add click handler
-          const statusEl = element.querySelector('.status-value');
-          statusEl.style.cursor = 'pointer';
-          statusEl.addEventListener('click', () => downloadAPIModel(api.check, api.name));
-        } else if (availability === 'downloading') {
-          element.innerHTML = '<span class="status-value downloading">⏳ Downloading</span>';
-        } else {
-          element.innerHTML = '<span class="status-value unavailable">❌ Unavailable</span>';
-        }
-      } else {
-        element.innerHTML = '<span class="status-value unavailable">❌ Not supported</span>';
-      }
-    } catch (error) {
-      console.error(`Error checking ${api.name}:`, error);
-      element.innerHTML = '<span class="status-value unavailable">❌ Check failed</span>';
-    }
-  }
-  
-  // Update overall status
-  const overallStatus = document.getElementById('builtinOverallStatus');
-  if (overallStatus) {
-    if (availableCount === apis.length) {
-      overallStatus.innerHTML = '<span class="status-value available">✅ All APIs Available</span>';
-    } else if (availableCount > 0) {
-      overallStatus.innerHTML = `<span class="status-value available">✅ ${availableCount}/${apis.length} APIs Available</span>`;
-    } else {
-      overallStatus.innerHTML = '<span class="status-value unavailable">❌ No APIs Available</span>';
-    }
-  }
-}
-
-// Download API Model from dashboard
-async function downloadAPIModel(apiName, displayName) {
-  console.log(`📥 Starting download for ${displayName}...`);
-  
-  const statusElement = document.getElementById(`builtin${displayName}Status`);
-  if (!statusElement) return;
-  
-  // Show downloading status
-  statusElement.innerHTML = '<span class="status-value downloading">⏳ Downloading...</span>';
-  
-  try {
-    let session;
-    
-    if (apiName === 'Translator') {
-      // Translator needs language parameters
-      session = await self.Translator.create({
-        sourceLanguage: 'en',
-        targetLanguage: 'es',
-        monitor(m) {
-          m.addEventListener('downloadprogress', (e) => {
-            const percent = Math.round(e.loaded * 100);
-            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
-          });
-        }
-      });
-    } else if (apiName === 'Summarizer') {
-      session = await self.Summarizer.create({
-        type: 'key-points',
-        format: 'markdown',
-        length: 'medium',
-        monitor(m) {
-          m.addEventListener('downloadprogress', (e) => {
-            const percent = Math.round(e.loaded * 100);
-            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
-          });
-        }
-      });
-    } else if (apiName === 'LanguageModel') {
-      session = await self.LanguageModel.create({
-        monitor(m) {
-          m.addEventListener('downloadprogress', (e) => {
-            const percent = Math.round(e.loaded * 100);
-            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
-          });
-        }
-      });
-    } else {
-      // Generic download for other APIs
-      session = await self[apiName].create({
-        monitor(m) {
-          m.addEventListener('downloadprogress', (e) => {
-            const percent = Math.round(e.loaded * 100);
-            statusElement.innerHTML = `<span class="status-value downloading">📥 ${percent}%</span>`;
-          });
-        }
-      });
-    }
-    
-    // Success
-    statusElement.innerHTML = '<span class="status-value available">✅ Available</span>';
-    console.log(`✅ ${displayName} downloaded successfully`);
-    
-    // Refresh the entire dashboard after a short delay
-    setTimeout(() => updateProviderDashboard(), 500);
-    
-  } catch (error) {
-    console.error(`❌ Error downloading ${displayName}:`, error);
-    statusElement.innerHTML = '<span class="status-value unavailable">❌ Download failed</span>';
-    
-    // Revert to downloadable after 2 seconds
-    setTimeout(() => updateProviderDashboard(), 2000);
-  }
-}
-
-// Update Cloud API dashboard status
-async function updateCloudAPIDashboard() {
-  const apiKeyStatus = document.getElementById('cloudApiKeyStatus');
-  const connectionStatus = document.getElementById('cloudConnectionStatus');
-  
-  if (apiKeyStatus) {
-    const result = await chrome.storage.local.get(['geminiApiKey']);
-    const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
-    
-    if (hasApiKey) {
-      apiKeyStatus.innerHTML = '<span class="status-value available">✅ Configured</span>';
-    } else {
-      apiKeyStatus.innerHTML = '<span class="status-value unavailable">❌ Not configured</span>';
-    }
-  }
-  
-  if (connectionStatus) {
-    const result = await chrome.storage.local.get(['geminiApiKey']);
-    const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
-    
-    if (hasApiKey) {
-      connectionStatus.innerHTML = '<span class="status-value available">✅ Ready</span>';
-    } else {
-      connectionStatus.innerHTML = '<span class="status-value unavailable">⚠️ API key required</span>';
-    }
-  }
-}
-
 // Save API Key
-async function saveApiKey() {
+function saveApiKey() {
   const key = document.getElementById('apiKey').value.trim();
   if (!key) {
     alert('Please enter an API key');
     return;
   }
 
-  chrome.storage.local.set({ geminiApiKey: key }, async () => {
+  chrome.storage.local.set({ geminiApiKey: key }, () => {
     apiKey = key;
     checkApiStatus();
-    
-    // Reinitialize cloud provider with new API key in sidepanel
-    if (sidePanelProviderManager) {
-      const cloudProvider = sidePanelProviderManager.providers.get('cloud');
-      if (cloudProvider) {
-        await cloudProvider.setAPIKey(key);
-        console.log('✅ Sidepanel: Cloud provider reinitialized with new API key');
-      }
-      
-      // Reload provider manager settings to ensure it's in sync
-      await sidePanelProviderManager.loadSettings();
-      console.log('✅ Sidepanel: Provider manager settings reloaded');
-    }
-    
-    // Also update background provider manager
-    try {
-      await chrome.runtime.sendMessage({
-        action: 'updateApiKey',
-        apiKey: key
-      });
-      console.log('✅ Background: Cloud provider notified of API key update');
-    } catch (error) {
-      console.warn('Could not update background provider:', error);
-    }
-    
-    // Update provider status after saving key
-    await updateProviderStatus();
-    
-    // Refresh content scripts to sync state
-    await refreshContentScripts();
-    
-    // Show remove button
-    document.getElementById('removeApiKey').style.display = 'inline-block';
-    
     alert('API Key saved successfully!');
-  });
-}
-
-// Remove API Key
-async function removeApiKey() {
-  if (!confirm('Are you sure you want to remove the API key?\n\nCloud AI features will not work without an API key.')) {
-    return;
-  }
-
-  chrome.storage.local.remove('geminiApiKey', async () => {
-    apiKey = null;
-    document.getElementById('apiKey').value = '';
-    checkApiStatus();
-    
-    // Reinitialize cloud provider with null API key in sidepanel
-    if (sidePanelProviderManager) {
-      const cloudProvider = sidePanelProviderManager.providers.get('cloud');
-      if (cloudProvider) {
-        await cloudProvider.setAPIKey(null);
-        console.log('✅ Sidepanel: Cloud provider reinitialized with no API key');
-      }
-    }
-    
-    // Also update background provider manager
-    try {
-      await chrome.runtime.sendMessage({
-        action: 'updateApiKey',
-        apiKey: null
-      });
-      console.log('✅ Background: Cloud provider notified of API key removal');
-    } catch (error) {
-      console.warn('Could not update background provider:', error);
-    }
-    
-    // Update provider status after removing key
-    await updateProviderStatus();
-    
-    // Refresh content scripts to sync state
-    await refreshContentScripts();
-    
-    // Hide remove button
-    document.getElementById('removeApiKey').style.display = 'none';
-    
-    alert('API Key removed successfully!');
   });
 }
 
@@ -1106,93 +524,34 @@ function displayCurrentTask() {
     'summarize': `📄 Summarizing page: ${currentTask.title}`,
     'translate-page': `🌐 Translating page: ${currentTask.title}`,
     'translate-selection': `🔤 Translating selected text`,
-    'mindmap': `🧠 Creating mindmap for: ${currentTask.title}`
+    'mindmap': `🧠 Creating mindmap for: ${currentTask.title}`,
+    'social-content': `📱 Generating social content for: ${currentTask.title}`
   };
 
   taskDisplay.innerHTML = `<p>${taskDescriptions[currentTask.task] || 'Processing task...'}</p>`;
 }
 
-// Generate content using AI Provider Manager
+// Generate content using Gemini API
 async function generateContent(task) {
+  if (!apiKey) {
+    showResult('⚠️ Please configure your Gemini API key first!', 'error');
+    return;
+  }
+
   showLoading(true);
   document.getElementById('actionButtons').style.display = 'none';
 
-  // Add timeout to prevent infinite spinning (60 seconds)
-  const timeoutId = setTimeout(() => {
-    showLoading(false);
-    showResult('❌ Request timed out. The content may be too large. Try a smaller page or use Cloud AI.', 'error');
-    document.getElementById('actionButtons').style.display = 'flex';
-  }, 60000);
-
   try {
-    const manager = await initializeSidePanelProviderManager();
-    const activeProvider = manager.getActiveProvider();
-    let result;
-
-    // Use dedicated Built-in AI methods when available
-    if (task.task === 'summarize' && activeProvider === 'builtin') {
-      try {
-        console.log('📄 Using Built-in AI Summarizer API');
-        
-        // Built-in Summarizer has input limits (~4000 tokens / ~16000 chars)
-        // For large content, chunk it or use prompt-based approach
-        const MAX_SUMMARIZER_LENGTH = 15000;
-        
-        if (task.content.length > MAX_SUMMARIZER_LENGTH) {
-          console.warn(`⚠️ Content too large (${task.content.length} chars), using prompt-based approach`);
-          // Use prompt-based for large content
-          const prompt = await buildPrompt(task);
-          const response = await manager.generateContent(prompt);
-          result = response.data;
-        } else {
-          // Use Summarizer API for smaller content
-          const response = await manager.summarizeContent(task.content, {
-            type: 'key-points',
-            format: 'markdown',
-            length: 'medium'  // Changed from 'short' to 'medium' for more detail
-          });
-          result = response.data;
-          console.log('✅ Summarized using Built-in AI Summarizer API');
-        }
-      } catch (error) {
-        console.warn('⚠️ Built-in Summarizer failed, falling back to prompt-based:', error);
-        // Fallback to prompt-based summarization
-        const prompt = await buildPrompt(task);
-        const response = await manager.generateContent(prompt);
-        result = response.data;
-      }
-    } else {
-      // For other tasks or Cloud AI, use prompt-based approach
-      const prompt = await buildPrompt(task);
-      result = await callGeminiApi(prompt);
-    }
-
-    clearTimeout(timeoutId); // Clear timeout on success
+    const prompt = await buildPrompt(task);
+    const result = await callGeminiApi(prompt);
     showResult(result, 'success');
     saveToHistory(task, result);
     document.getElementById('actionButtons').style.display = 'flex';
   } catch (error) {
-    clearTimeout(timeoutId); // Clear timeout on error
     console.error('Error generating content:', error);
     console.error('Error stack:', error.stack);
-    
-    // Provide helpful error messages
-    let errorMessage = error.message || 'Unknown error occurred';
-    
-    if (errorMessage.includes('Both providers are unavailable')) {
-      errorMessage = '❌ Both AI providers are unavailable.\n\n' +
-        '• Built-in AI: May not be ready or content is too large\n' +
-        '• Cloud AI: Requires API key configuration\n\n' +
-        'Please configure your Gemini API key in Settings or try a smaller page.';
-    } else if (errorMessage.includes('Summarizer API not available')) {
-      errorMessage = '❌ Summarizer API is not available.\n\n' +
-        'Please ensure you have Chrome 138+ and Gemini Nano is downloaded.\n' +
-        'Visit chrome://on-device-internals to check status.';
-    } else if (errorMessage.includes('User activation required')) {
-      errorMessage = '❌ User interaction required. Please click the button again.';
-    }
-    
-    showResult(errorMessage, 'error');
+    const errorMessage = error.message || 'Unknown error occurred';
+    showResult(`❌ Error: ${errorMessage}`, 'error');
   }
 
   showLoading(false);
@@ -1204,19 +563,14 @@ async function buildPrompt(task) {
   const langName = getLanguageName(targetLang);
 
   const prompts = {
-    'summarize': `Create an engaging and informative summary of the following content.
+    'summarize': `Create a TLDR summary of the following content. 
 
-STRUCTURE:
-1. **🎯 Main Point** - One sentence capturing the core message (use bold)
-2. **📋 Key Takeaways** - 5-7 bullet points with the most important information
-3. **💡 Notable Details** - 2-3 interesting facts or insights worth knowing
-
-STYLE:
-- Make it informative yet easy to scan
-- Use emojis sparingly for visual interest
-- Keep each bullet point clear and specific (15-25 words)
-- Focus on actionable insights and key facts
-- Make it engaging - this should be fun to read!
+RULES:
+- Use EXACTLY 3-5 bullet points (• symbol)
+- Each bullet point should be ONE concise sentence (max 20 words)
+- Focus ONLY on key facts, main ideas, or critical takeaways
+- NO introductions, NO conclusions, NO fluff
+- Start directly with the bullets
 
 Content:
 ${task.content}`,
@@ -1225,38 +579,16 @@ ${task.content}`,
 
     'translate-selection': `Please translate the following text to ${langName}:\n\n${task.content}`,
 
-    'mindmap': `Create a visual mindmap for the following content. Format it as a centered, branching structure with a main topic in the center (use 🎯 emoji), major branches (use ⭐ emoji), and sub-branches (use • emoji). Make it visually distinct and easy to scan:\n\n${task.content}\n\nFormat example:\n\n🎯 Main Topic\n   │\n   ├─⭐ Major Branch 1\n   │   • Sub-point 1\n   │   • Sub-point 2\n   │\n   ├─⭐ Major Branch 2\n   │   • Sub-point 1\n   │\n   └─⭐ Major Branch 3\n       • Sub-point 1`
+    'mindmap': `Create a visual mindmap for the following content. Format it as a centered, branching structure with a main topic in the center (use 🎯 emoji), major branches (use ⭐ emoji), and sub-branches (use • emoji). Make it visually distinct and easy to scan:\n\n${task.content}\n\nFormat example:\n\n🎯 Main Topic\n   │\n   ├─⭐ Major Branch 1\n   │   • Sub-point 1\n   │   • Sub-point 2\n   │\n   ├─⭐ Major Branch 2\n   │   • Sub-point 1\n   │\n   └─⭐ Major Branch 3\n       • Sub-point 1`,
+
+    'social-content': `Create viral social media content based on the following webpage. Generate posts for Twitter/X, LinkedIn, and Instagram. Each post should have:\n1. A catchy hook\n2. Main content with value\n3. Call to action\n4. Relevant hashtags\n\nSource content:\n${task.content}\n\nURL: ${task.url}`
   };
 
   return prompts[task.task] || task.content;
 }
 
-// Call AI Provider Manager (replaces direct Gemini API calls)
+// Call Gemini API
 async function callGeminiApi(prompt, imageParts = null) {
-  // If there are image parts, use direct Gemini API call (multimodal requires Cloud AI)
-  if (imageParts && imageParts.length > 0) {
-    return await callGeminiApiLegacy(prompt, imageParts);
-  }
-  
-  // For text-only requests, use provider manager
-  try {
-    const manager = await initializeSidePanelProviderManager();
-    
-    console.log('📤 Calling AI Provider Manager with prompt length:', prompt.length);
-    
-    const response = await manager.generateContent(prompt);
-    
-    console.log('✅ Response received from', response.provider);
-    
-    return response.data;
-  } catch (error) {
-    console.error('❌ AI Provider error:', error);
-    throw error;
-  }
-}
-
-// Legacy function kept for compatibility - now uses provider manager
-async function callGeminiApiLegacy(prompt, imageParts = null) {
   // Use latest lite model
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent?key=${apiKey}`;
 
@@ -1268,7 +600,7 @@ async function callGeminiApiLegacy(prompt, imageParts = null) {
     parts = [{ text: prompt }];
   }
 
-  console.log('📤 Calling Gemini API (legacy) with prompt length:', prompt.length);
+  console.log('📤 Calling Gemini API with prompt length:', prompt.length);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -1401,201 +733,7 @@ async function callGeminiVisionApi(prompt, imageBase64) {
   return data.candidates[0].content.parts[0].text;
 }
 
-// Get current AI provider
-function getCurrentProvider() {
-  if (sidePanelProviderManager && sidePanelProviderManager.getActiveProvider()) {
-    return sidePanelProviderManager.getActiveProvider();
-  }
-  // Default to builtin if not set
-  return 'builtin';
-}
-
-// Smart PDF extraction - chooses method based on AI provider
-async function extractPDFPage(tabId, pageNumber = null) {
-  const provider = getCurrentProvider();
-  
-  // Built-in AI: try text extraction first, fall back to OCR if needed
-  if (provider === 'builtin') {
-    try {
-      return await extractPDFPageText(tabId, pageNumber);
-    } catch (error) {
-      // If OCR fallback also failed and it's due to missing API key
-      if (error.message.includes('API key')) {
-        // Show helpful message to user
-        const userWantsOCR = confirm(
-          'This PDF requires OCR (image-based text extraction).\n\n' +
-          'Built-in AI cannot extract text from Chrome\'s native PDF viewer.\n\n' +
-          'Options:\n' +
-          '1. Switch to Cloud AI and configure API key for OCR\n' +
-          '2. Open the PDF in a different viewer (Firefox PDF.js)\n\n' +
-          'Would you like to switch to Cloud AI now?'
-        );
-        
-        if (userWantsOCR) {
-          // Switch to cloud AI
-          await switchProvider('cloud');
-          throw new Error('Please configure your API key in Settings, then try again.');
-        }
-      }
-      throw error;
-    }
-  }
-  
-  // Cloud AI: use OCR for better accuracy with images
-  return await extractPDFPageWithOCR(tabId, pageNumber);
-}
-
-// Extract PDF page text directly (for built-in AI - no OCR needed)
-async function extractPDFPageText(tabId, pageNumber = null) {
-  try {
-    console.log('📄 Extracting PDF text...');
-
-    // Hide floating popup before extraction
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        function: () => {
-          const popup = document.getElementById('ai-assistant-popup');
-          if (popup) {
-            popup.style.display = 'none';
-          }
-        }
-      });
-    } catch (e) {
-      console.log('Could not hide popup:', e);
-    }
-
-    // Get current page number from the PDF viewer if not provided
-    if (!pageNumber) {
-      try {
-        const pageResults = await chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          function: () => {
-            // Try PDF.js viewer
-            if (window.PDFViewerApplication && window.PDFViewerApplication.pdfViewer) {
-              const pageNum = window.PDFViewerApplication.pdfViewer.currentPageNumber;
-              return { page: pageNum, method: 'pdfjs' };
-            }
-            return { page: 1, method: 'default' };
-          }
-        });
-        pageNumber = pageResults[0]?.result?.page || 1;
-      } catch (e) {
-        console.log('Could not detect page number, defaulting to page 1:', e.message);
-        pageNumber = 1;
-      }
-    }
-
-    console.log('📄 Extracting text from page:', pageNumber);
-
-    // Request text from pdf-content.js
-    const textResults = await chrome.tabs.sendMessage(tabId, { action: 'getPDFText' });
-    const extractedText = textResults?.text || '';
-
-    // Check if extraction failed or returned empty/invalid text
-    if (!extractedText || 
-        extractedText === 'No text could be extracted from PDF' ||
-        extractedText.length < 10) {
-      
-      console.warn('⚠️ Text extraction failed or returned minimal text');
-      console.log('💡 Chrome native PDF viewer detected - switching to OCR fallback');
-      
-      // Automatically fall back to OCR for Chrome's native viewer
-      return await extractPDFPageWithOCR(tabId, pageNumber);
-    }
-
-    console.log('✅ Text extraction complete, length:', extractedText.length);
-
-    // Filter out extension UI text that might have slipped through
-    const menuTexts = [
-      'Mentelo',
-      'Summarize Page',
-      'Translate Page',
-      'Translate Text',
-      'Text to Speech',
-      'Chat with Page',
-      'Call Mindy',
-      'Social Content',
-      'Save',
-      'Bookmark',
-      'Open Dashboard'
-    ];
-    
-    let cleanedText = extractedText;
-    for (const menuText of menuTexts) {
-      // Remove menu text and surrounding whitespace
-      const regex = new RegExp(`\\s*${menuText}\\s*`, 'gi');
-      cleanedText = cleanedText.replace(regex, ' ');
-    }
-    
-    // Clean up multiple spaces
-    cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
-    
-    console.log('🧹 Cleaned text, length:', cleanedText.length);
-
-    // Apply context limit safeguards
-    const maxChars = 10000;
-    const truncated = cleanedText.length > maxChars;
-    const finalText = truncated ? cleanedText.substring(0, maxChars) : cleanedText;
-
-    if (truncated) {
-      console.warn(`⚠️ Extracted text is large (${cleanedText.length} chars), truncating to ${maxChars}`);
-    }
-
-    // Restore popup
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        function: () => {
-          const popup = document.getElementById('ai-assistant-popup');
-          if (popup) {
-            popup.style.display = '';
-          }
-        }
-      });
-    } catch (e) {
-      console.log('Could not restore popup:', e);
-    }
-
-    return {
-      text: finalText,
-      truncated: truncated,
-      originalLength: extractedText.length,
-      pageNumber: pageNumber,
-      timestamp: Date.now(),
-      charCount: finalText.length,
-      method: 'text-extraction'
-    };
-  } catch (error) {
-    console.error('❌ PDF text extraction error:', error);
-    console.log('🔄 Falling back to OCR...');
-    
-    // Restore popup before falling back
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        function: () => {
-          const popup = document.getElementById('ai-assistant-popup');
-          if (popup) {
-            popup.style.display = '';
-          }
-        }
-      });
-    } catch (e) {
-      console.log('Could not restore popup:', e);
-    }
-    
-    // Fall back to OCR if text extraction fails
-    try {
-      return await extractPDFPageWithOCR(tabId, pageNumber);
-    } catch (ocrError) {
-      console.error('❌ OCR fallback also failed:', ocrError);
-      throw new Error('Could not extract text from PDF using either method. Please ensure you have a valid API key configured for OCR.');
-    }
-  }
-}
-
-// Extract PDF page content using OCR (for cloud AI with vision capabilities)
+// Extract PDF page content using OCR
 async function extractPDFPageWithOCR(tabId, pageNumber = null) {
   try {
     console.log('📸 Capturing PDF page screenshot...');
@@ -1954,7 +1092,7 @@ async function recapturePDFPage(bannerElement) {
 
     // Extract PDF content with specified page number
     console.log('📸 Extracting PDF content...');
-    const result = await extractPDFPage(pdfMode.currentTab.id, pageNumber);
+    const result = await extractPDFPageWithOCR(pdfMode.currentTab.id, pageNumber);
     console.log('✅ Extraction complete. Page:', result.pageNumber, 'Length:', result.charCount);
 
     // Update the viewing page
@@ -2201,11 +1339,7 @@ function clearAllBookmarks() {
 
 // Organize bookmarks with AI
 async function organizeBookmarks() {
-  // Check if API key is needed (only for cloud AI)
-  const manager = await initializeSidePanelProviderManager();
-  const activeProvider = manager.getActiveProvider();
-  
-  if (activeProvider === 'cloud' && !apiKey) {
+  if (!apiKey) {
     alert('Please configure your API key first!');
     return;
   }
@@ -2275,6 +1409,7 @@ function getTaskIcon(task) {
     'translate-page': '🌐',
     'translate-selection': '🔤',
     'mindmap': '🧠',
+    'social-content': '📱',
     'extract-image-text': '🖼️',
     'explain-image': '🔍'
   };
@@ -2517,14 +1652,7 @@ async function sendChatMessage() {
 
   if (!message) return;
 
-  // Check if API key is needed (only for cloud AI)
-  const manager = await initializeSidePanelProviderManager();
-  const activeProvider = manager.getActiveProvider();
-  
-  // Reload API key from storage to ensure we have the latest value
-  await loadApiKey();
-  
-  if (activeProvider === 'cloud' && !apiKey) {
+  if (!apiKey) {
     alert('Please configure your API key first!');
     return;
   }
@@ -2570,7 +1698,7 @@ async function sendChatMessage() {
         console.log('📸 Capturing PDF page 1 on first message...');
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tabs[0]) {
-          const result = await extractPDFPage(tabs[0].id, 1);
+          const result = await extractPDFPageWithOCR(tabs[0].id, 1);
           addCapturedPage(result);
           pageContent = buildPDFContext();
         }
@@ -2706,6 +1834,14 @@ async function clearChat() {
 
 // Translate and replace selected text
 async function translateAndReplace(content, tabId, htmlContent) {
+  if (!apiKey) {
+    chrome.tabs.sendMessage(tabId, {
+      action: 'replaceSelection',
+      translatedText: 'Error: Please configure your API key first in Settings.'
+    });
+    return;
+  }
+
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
@@ -2714,45 +1850,14 @@ async function translateAndReplace(content, tabId, htmlContent) {
     const contentToTranslate = htmlContent || content;
     const isHTML = !!htmlContent && htmlContent.includes('<');
 
-    // Get AI Provider Manager
-    const manager = await initializeSidePanelProviderManager();
-    
-    // Check which provider is active
-    const activeProvider = manager.getActiveProvider();
-    let translatedText;
-
-    // If Built-in AI and Translator API is available, use it directly
-    if (activeProvider === 'builtin') {
-      try {
-        // Detect source language (assume English for now, could use Language Detector API)
-        const sourceLang = 'en';
-        
-        // Use Built-in Translator API for direct translation
-        const response = await manager.translateText(contentToTranslate, sourceLang, targetLang);
-        translatedText = response.data;
-        
-        console.log(`✅ Translated using Built-in AI Translator API (${sourceLang} → ${targetLang})`);
-      } catch (error) {
-        console.warn('⚠️ Built-in Translator failed, falling back to prompt-based translation:', error);
-        // Fallback to prompt-based translation
-        const prompt = isHTML
-          ? `Translate the following HTML content to ${langName}. Preserve all HTML tags exactly. Only translate text content:\n\n${contentToTranslate}`
-          : `Translate the following text to ${langName}. Preserve formatting:\n\n${contentToTranslate}`;
-        
-        const response = await manager.generateContent(prompt);
-        translatedText = response.data;
-      }
+    let prompt;
+    if (isHTML) {
+      prompt = `Translate the following HTML content to ${langName}. Preserve all HTML tags (<br>, <p>, <div>, etc.) exactly as they are. Only translate the text content inside the tags. Return valid HTML:\n\n${contentToTranslate}`;
     } else {
-      // Cloud AI: use prompt-based translation
-      const prompt = isHTML
-        ? `Translate the following HTML content to ${langName}. Preserve all HTML tags (<br>, <p>, <div>, etc.) exactly as they are. Only translate the text content inside the tags. Return valid HTML:\n\n${contentToTranslate}`
-        : `Translate the following text to ${langName}. Preserve all line breaks and paragraph structure. Only return the translated text:\n\n${contentToTranslate}`;
-      
-      const response = await manager.generateContent(prompt);
-      translatedText = response.data;
-      
-      console.log(`✅ Translated using Cloud AI (${activeProvider})`);
+      prompt = `Translate the following text to ${langName}. Preserve all line breaks and paragraph structure. Only return the translated text:\n\n${contentToTranslate}`;
     }
+
+    const translatedText = await callGeminiApi(prompt);
 
     // Send translated text to content script to replace selection
     chrome.tabs.sendMessage(tabId, {
@@ -2771,6 +1876,14 @@ async function translateAndReplace(content, tabId, htmlContent) {
 
 // Translate page in-place (replace all text nodes)
 async function translatePageInPlace(content, tabId) {
+  if (!apiKey) {
+    chrome.tabs.sendMessage(tabId, {
+      action: 'replacePageText',
+      translations: '[0]Error: Please configure your API key first in Settings.'
+    });
+    return;
+  }
+
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
@@ -2778,14 +1891,6 @@ async function translatePageInPlace(content, tabId) {
     console.log('Translating page to:', langName);
     console.log('Content length:', content.length);
 
-    // Get AI Provider Manager
-    const manager = await initializeSidePanelProviderManager();
-    const activeProvider = manager.getActiveProvider();
-    
-    let translatedText;
-
-    // For page translation, we need to use prompt-based approach for both providers
-    // because we need to preserve the [index] markers for text node replacement
     const prompt = `Translate the following indexed text to ${langName}. Each line starts with [index] followed by text. You must:
 1. Keep the [index] markers exactly as they are
 2. Translate only the text after each [index]
@@ -2796,10 +1901,7 @@ async function translatePageInPlace(content, tabId) {
 Text to translate:
 ${content}`;
 
-    const response = await manager.generateContent(prompt);
-    translatedText = response.data;
-    
-    console.log(`✅ Page translated using ${activeProvider === 'builtin' ? 'Built-in AI' : 'Cloud AI'}`)
+    const translatedText = await callGeminiApi(prompt);
     console.log('Translation received, length:', translatedText.length);
 
     // Send translated text to content script to replace all text nodes
@@ -2819,42 +1921,21 @@ ${content}`;
 
 // Translate and inject into page (old overlay method - kept for compatibility)
 async function translateAndInject(content, tabId) {
+  if (!apiKey) {
+    chrome.tabs.sendMessage(tabId, {
+      action: 'injectTranslation',
+      translatedText: 'Error: Please configure your API key first in Settings.'
+    });
+    return;
+  }
+
   try {
     const targetLang = await loadTargetLanguage();
     const langName = getLanguageName(targetLang);
 
-    // Get AI Provider Manager
-    const manager = await initializeSidePanelProviderManager();
-    const activeProvider = manager.getActiveProvider();
-    
-    let translatedText;
+    const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
 
-    // If Built-in AI and Translator API is available, use it directly
-    if (activeProvider === 'builtin') {
-      try {
-        // Detect source language (assume English for now)
-        const sourceLang = 'en';
-        
-        // Use Built-in Translator API
-        const response = await manager.translateText(content, sourceLang, targetLang);
-        translatedText = response.data;
-        
-        console.log(`✅ Translated using Built-in AI Translator API`);
-      } catch (error) {
-        console.warn('⚠️ Built-in Translator failed, falling back to prompt-based:', error);
-        // Fallback to prompt-based
-        const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
-        const response = await manager.generateContent(prompt);
-        translatedText = response.data;
-      }
-    } else {
-      // Cloud AI: use prompt-based translation
-      const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
-      const response = await manager.generateContent(prompt);
-      translatedText = response.data;
-      
-      console.log(`✅ Translated using Cloud AI`);
-    }
+    const translatedText = await callGeminiApi(prompt);
 
     // Send translated text to content script to inject
     chrome.tabs.sendMessage(tabId, {
@@ -3040,15 +2121,6 @@ async function playNextChunk() {
 
 // Generate Text-to-Speech from selected text
 async function generateTextToSpeech(content) {
-  // TTS requires cloud AI (uses Gemini TTS model)
-  const manager = await initializeSidePanelProviderManager();
-  const activeProvider = manager.getActiveProvider();
-  
-  if (activeProvider !== 'cloud') {
-    alert('Text-to-Speech requires Cloud AI. Please switch to Cloud AI in Settings.');
-    return;
-  }
-  
   if (!apiKey) {
     alert('Please configure your API key first in Settings!');
     return;
@@ -3400,19 +2472,6 @@ async function handleTextAssist(prompt) {
 
 // Explain image using Gemini Vision API
 async function explainImage(imageUrl) {
-  // Image explanation requires cloud AI (multimodal support)
-  const manager = await initializeSidePanelProviderManager();
-  const activeProvider = manager.getActiveProvider();
-  
-  if (activeProvider !== 'cloud') {
-    showResult('⚠️ Image explanation requires Cloud AI. Please switch to Cloud AI in Settings.', 'error');
-    return;
-  }
-  
-  // Refresh API key from storage to ensure we have the latest value
-  const result = await chrome.storage.local.get(['geminiApiKey']);
-  apiKey = result.geminiApiKey || null;
-  
   if (!apiKey) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
@@ -3487,19 +2546,6 @@ Keep it brief and informative, like a quick summary for someone who can't see th
 
 // Extract text from image using Gemini Vision API
 async function extractImageText(imageUrl) {
-  // Image text extraction requires cloud AI (multimodal support)
-  const manager = await initializeSidePanelProviderManager();
-  const activeProvider = manager.getActiveProvider();
-  
-  if (activeProvider !== 'cloud') {
-    showResult('⚠️ Image text extraction requires Cloud AI. Please switch to Cloud AI in Settings.', 'error');
-    return;
-  }
-  
-  // Refresh API key from storage to ensure we have the latest value
-  const result = await chrome.storage.local.get(['geminiApiKey']);
-  apiKey = result.geminiApiKey || null;
-  
   if (!apiKey) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
@@ -3587,28 +2633,10 @@ let mindyTimerStart = null;
 let mindyTimerInterval = null;
 
 async function startMindyCall() {
-  // Reload API key from storage to ensure we have the latest value
-  await loadApiKey();
-  
-  // Mindy requires Cloud API with an API key
   if (!apiKey) {
-    alert('Call Mindy requires a Gemini API key.\n\nPlease configure your API key in Settings first.');
+    alert('Please configure your Gemini API key first in Settings.');
     switchTab('settings');
     return;
-  }
-  
-  // Mindy always uses Cloud AI (regardless of the selected provider in settings)
-  // Initialize provider manager and ensure it's ready
-  const manager = await initializeSidePanelProviderManager();
-  
-  // Temporarily switch to cloud provider for this call (without changing user's preference)
-  const originalProvider = manager.getActiveProvider();
-  try {
-    // Force cloud provider for Mindy
-    manager.activeProvider = 'cloud';
-    console.log('✅ Mindy: Using Cloud AI provider');
-  } catch (error) {
-    console.error('Error setting cloud provider for Mindy:', error);
   }
 
   // Check if microphone permission was previously granted
@@ -4325,8 +3353,8 @@ async function getPageContext(tab) {
         // Small delay to ensure popup is hidden
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Extract PDF content (page 1)
-        const result = await extractPDFPage(tab.id, 1);
+        // Extract PDF content using OCR (page 1)
+        const result = await extractPDFPageWithOCR(tab.id, 1);
 
         // Add to captured pages
         addCapturedPage(result);
