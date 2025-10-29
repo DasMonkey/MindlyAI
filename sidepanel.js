@@ -2319,10 +2319,12 @@ async function loadPageContent() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs[0]) {
       pageContent = 'No active tab found.';
+      console.log('❌ No active tab found');
       return;
     }
 
     const tab = tabs[0];
+    console.log('📥 Loading page content from tab:', tab.id, tab.url);
 
     // Check if this is a PDF
     const isPDF = tab.url.toLowerCase().endsWith('.pdf') || tab.url.includes('.pdf?');
@@ -2355,22 +2357,36 @@ async function loadPageContent() {
 
     // Regular webpage - use message passing to content script
     return new Promise((resolve) => {
+      // Add timeout to handle cases where content script isn't ready
+      const timeout = setTimeout(() => {
+        console.warn('⏱️ Content script timeout - content script may not be injected');
+        pageContent = 'Unable to load page content. The content script may not be loaded on this page. Try refreshing the page.';
+        resolve();
+      }, 5000);
+      
       chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' }, (response) => {
+        clearTimeout(timeout);
+        
         if (chrome.runtime.lastError) {
-          console.log('Error loading page content:', chrome.runtime.lastError);
-          pageContent = 'Unable to load page content. Please refresh the page.';
+          console.log('❌ Error loading page content:', chrome.runtime.lastError.message);
+          pageContent = 'Unable to load page content. The content script may not be loaded on this page. Try refreshing the page.';
           resolve();
         } else if (response && response.content) {
+          const oldContent = pageContent;
           pageContent = response.content;
+          console.log('✅ Page content loaded, length:', pageContent.length, 'chars');
+          console.log('📄 Content changed:', oldContent !== pageContent);
+          console.log('📄 New content preview:', pageContent.substring(0, 150));
           resolve();
         } else {
           pageContent = 'No content available from this page.';
+          console.log('⚠️ No content available from page - empty response');
           resolve();
         }
       });
     });
   } catch (error) {
-    console.log('Could not load page content:', error);
+    console.log('❌ Could not load page content:', error);
     pageContent = 'Error loading page content.';
   }
 }
@@ -2378,55 +2394,66 @@ async function loadPageContent() {
 // Detect tab changes and show refresh button if needed
 async function checkForTabChange() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tabs[0]) {
-    const newTabId = tabs[0].id;
-    const newUrl = tabs[0].url;
+  if (!tabs[0]) return;
+  
+  const newTabId = tabs[0].id;
+  const newUrl = tabs[0].url;
 
-    // Only check if a conversation session exists (chat or Mindy)
-    if (!chatSessionTab.id) {
-      return; // No session yet, button should NOT show
-    }
-
-    const hasChatInteraction = chatHistory.length > 0;
-    const hasSessionInteraction = hasChatInteraction || sessionActivity.hasInteraction;
-
-    if (!hasSessionInteraction) {
-      return; // User hasn't interacted yet, keep button hidden
-    }
-
-    // Get the currently active sidepanel tab
-    const currentTab = document.querySelector('.tab.active')?.dataset.tab;
-
-    // Check if this is a different tab or URL
-    if (currentPageTab.id && (currentPageTab.id !== newTabId || currentPageTab.url !== newUrl)) {
-      // Determine which button to show based on active sidepanel tab
-      let refreshBtn = null;
-      if (currentTab === 'chat') {
-        refreshBtn = document.getElementById('chatRefreshBtn');
-      } else if (currentTab === 'mindy') {
-        refreshBtn = document.getElementById('mindyRefreshBtn');
-      }
-
-      if (refreshBtn) {
-        // Check if returning to original session tab
-        if (chatSessionTab.id === newTabId && chatSessionTab.url === newUrl) {
-          // Back to original session - hide button
-          refreshBtn.style.display = 'none';
-        } else {
-          // Different page - show button
-          refreshBtn.style.display = 'flex';
-        }
-      }
-    }
-
-    // Update tracking
+  // Only check if a conversation session exists (chat or Mindy)
+  if (!chatSessionTab.id) {
+    // No session yet - update current page tracking but don't show button
     currentPageTab.id = newTabId;
     currentPageTab.url = newUrl;
+    return;
   }
+
+  const hasChatInteraction = chatHistory.length > 0;
+  const hasSessionInteraction = hasChatInteraction || sessionActivity.hasInteraction;
+
+  if (!hasSessionInteraction) {
+    // User hasn't interacted yet - update tracking but keep button hidden
+    currentPageTab.id = newTabId;
+    currentPageTab.url = newUrl;
+    return;
+  }
+
+  // Get the currently active sidepanel tab
+  const currentTab = document.querySelector('.tab.active')?.dataset.tab;
+  
+  // Determine which button to show based on active sidepanel tab
+  let refreshBtn = null;
+  if (currentTab === 'chat') {
+    refreshBtn = document.getElementById('chatRefreshBtn');
+  } else if (currentTab === 'mindy') {
+    refreshBtn = document.getElementById('mindyRefreshBtn');
+  }
+
+  // Check if this is a different tab or URL from the session tab
+  const isDifferentFromSession = (chatSessionTab.id !== newTabId || chatSessionTab.url !== newUrl);
+  
+  if (isDifferentFromSession) {
+    // Different page from session - show button
+    if (refreshBtn) {
+      refreshBtn.style.display = 'flex';
+      console.log('🔄 Tab changed - showing refresh button. Session:', chatSessionTab.id, 'Current:', newTabId);
+    }
+  } else {
+    // Back to original session tab - hide button
+    if (refreshBtn) {
+      refreshBtn.style.display = 'none';
+      console.log('✅ Back to session tab - hiding refresh button');
+    }
+  }
+
+  // Update current page tracking
+  currentPageTab.id = newTabId;
+  currentPageTab.url = newUrl;
 }
 
 // Start fresh chat session with new page
 async function startFreshChatSession() {
+  console.log('🔄 Starting fresh chat session...');
+  
   // Clear chat messages except welcome message
   const chatMessages = document.getElementById('chatMessages');
   chatMessages.innerHTML = `
@@ -2438,7 +2465,8 @@ async function startFreshChatSession() {
     </div>
   `;
 
-  // Clear page content and chat history
+  // Clear page content and chat history completely
+  console.log('🧹 Clearing pageContent (was:', pageContent?.length || 0, 'chars)');
   pageContent = null;
   chatHistory = [];
   sessionActivity = { hasInteraction: false, source: null };
@@ -2447,21 +2475,33 @@ async function startFreshChatSession() {
   if (pdfMode.isActive) {
     pdfMode.capturedPages = [];
     pdfMode.lastLoadedPage = null;
+    pdfMode.isActive = false; // Reset PDF mode
     savePDFModeToStorage();
     updatePDFStatusBanner();
   }
 
-  // Update session tab to current tab (new session starts here)
+  // Get current tab and set it as the new session tab
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
+    console.log('📍 Previous session tab:', chatSessionTab.id, chatSessionTab.url);
+    console.log('📍 New session tab:', tabs[0].id, tabs[0].url);
     chatSessionTab.id = tabs[0].id;
     chatSessionTab.url = tabs[0].url;
     currentPageTab.id = tabs[0].id;
     currentPageTab.url = tabs[0].url;
+    console.log('🎯 New chat session initialized with tab:', tabs[0].id, tabs[0].url);
   }
 
-  // Load new page content
+  // Load new page content from the current tab
   await loadPageContent();
+  
+  // Verify content was loaded
+  if (pageContent) {
+    console.log('✅ Page content loaded successfully, length:', pageContent.length);
+    console.log('📄 First 200 chars:', pageContent.substring(0, 200));
+  } else {
+    console.warn('⚠️ Page content is still null after loadPageContent()');
+  }
 
   // Hide refresh button
   const refreshBtn = document.getElementById('chatRefreshBtn');
@@ -2474,32 +2514,40 @@ async function startFreshChatSession() {
 
 // Start fresh Mindy session with new page
 async function startFreshMindySession() {
+  console.log('🔄 Starting fresh Mindy session...');
+  
   // Clear Mindy transcript
   const mindyTranscript = document.getElementById('mindyTranscriptPanel');
   mindyTranscript.innerHTML = `
     <p class="mindy-info-panel">Click "Start Call" to begin. I'll have access to this page's content and can answer your questions via voice.</p>
   `;
 
-  // Clear page content and session activity
+  // Clear page content and session activity completely
   pageContent = null;
+  chatHistory = []; // Also clear chat history for consistency
   sessionActivity = { hasInteraction: false, source: null };
 
   // Clear captured PDF pages if in PDF mode
   if (pdfMode.isActive) {
     pdfMode.capturedPages = [];
     pdfMode.lastLoadedPage = null;
+    pdfMode.isActive = false; // Reset PDF mode
     savePDFModeToStorage();
     updatePDFStatusBanner();
   }
 
-  // Update session tab to current tab (new session starts here)
+  // Get current tab and set it as the new session tab
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
     chatSessionTab.id = tabs[0].id;
     chatSessionTab.url = tabs[0].url;
     currentPageTab.id = tabs[0].id;
     currentPageTab.url = tabs[0].url;
+    console.log('🎯 New Mindy session initialized with tab:', tabs[0].id, tabs[0].url);
   }
+
+  // Load new page content from the current tab
+  await loadPageContent();
 
   // Hide refresh button
   const refreshBtn = document.getElementById('mindyRefreshBtn');
@@ -2548,20 +2596,31 @@ async function sendChatMessage() {
       // Direct text improvement - no page context needed
       prompt = message;
     } else {
-      // Regular chat - load page content if not already loaded
-      if (!pageContent) {
-        await loadPageContent();
-      }
-
-      // Initialize chat session ONLY when user sends first message
-      if (!chatSessionTab.id) {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tabs[0]) {
-          chatSessionTab.id = tabs[0].id;
-          chatSessionTab.url = tabs[0].url;
-          currentPageTab.id = tabs[0].id;
-          currentPageTab.url = tabs[0].url;
-          console.log('🎯 Chat session initialized on first message with tab:', tabs[0].id, tabs[0].url);
+      // Regular chat - check if we're on a different tab than the session
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]) {
+        const currentTabId = tabs[0].id;
+        const currentUrl = tabs[0].url;
+        
+        // Initialize chat session ONLY when user sends first message
+        if (!chatSessionTab.id) {
+          chatSessionTab.id = currentTabId;
+          chatSessionTab.url = currentUrl;
+          currentPageTab.id = currentTabId;
+          currentPageTab.url = currentUrl;
+          console.log('🎯 Chat session initialized on first message with tab:', currentTabId, currentUrl);
+        }
+        
+        // Check if user is on a different tab than the session
+        if (chatSessionTab.id !== currentTabId || chatSessionTab.url !== currentUrl) {
+          console.warn('⚠️ User is asking about a different tab! Session:', chatSessionTab.id, 'Current:', currentTabId);
+          // Force reload page content from current tab
+          pageContent = null;
+          await loadPageContent();
+          console.log('🔄 Reloaded page content from current tab');
+        } else if (!pageContent) {
+          // Same tab but no content loaded yet
+          await loadPageContent();
         }
       }
 
@@ -2590,6 +2649,10 @@ ${pageContent ? pageContent.substring(0, 3000) : 'No page content available.'}
 User question: ${message}
 
 Please provide a helpful and accurate answer based on the page content above.${pdfInstructions}`;
+      
+      // Debug logging
+      console.log('📤 Sending prompt with page content length:', pageContent?.length || 0);
+      console.log('📄 Page content preview:', pageContent ? pageContent.substring(0, 200) : 'null');
     }
 
     // Call API
@@ -2666,6 +2729,7 @@ function removeTypingIndicator() {
 
 // Clear chat and start fresh session
 async function clearChat() {
+  console.log('🧹 Clearing chat and resetting session...');
 
   // Clear chat messages except welcome message
   const chatMessages = document.getElementById('chatMessages');
@@ -2678,21 +2742,31 @@ async function clearChat() {
     </div>
   `;
 
-  // Clear page content and chat history
+  // Clear page content and chat history completely
   pageContent = null;
   chatHistory = [];
   sessionActivity = { hasInteraction: false, source: null };
 
-  // Update session tab to current tab (new session starts here)
+  // Clear captured PDF pages if in PDF mode
+  if (pdfMode.isActive) {
+    pdfMode.capturedPages = [];
+    pdfMode.lastLoadedPage = null;
+    pdfMode.isActive = false; // Reset PDF mode
+    savePDFModeToStorage();
+    updatePDFStatusBanner();
+  }
+
+  // Get current tab and set it as the new session tab
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
     chatSessionTab.id = tabs[0].id;
     chatSessionTab.url = tabs[0].url;
     currentPageTab.id = tabs[0].id;
     currentPageTab.url = tabs[0].url;
+    console.log('🎯 Chat cleared and reset to current tab:', tabs[0].id, tabs[0].url);
   }
 
-  // Load new page content
+  // Load new page content from the current tab
   await loadPageContent();
 
   // Hide refresh button
