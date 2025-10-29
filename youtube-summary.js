@@ -499,9 +499,8 @@ class YouTubeSummary {
         const text = textEl.textContent.trim();
         const segmentKey = `${timestamp}:${text}`; // Unique key for this segment
 
-        // Skip if we've already seen this exact segment
+        // Skip if we've already seen this exact segment (silently)
         if (seenSegments.has(segmentKey)) {
-          console.warn(`⚠️ Skipping duplicate segment: [${timestamp}]`);
           return;
         }
 

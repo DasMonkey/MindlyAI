@@ -385,6 +385,19 @@ async function initializeProviderSettings() {
     updateProviderSelection(preferredProvider);
   }
   
+  // IMPORTANT: Set the active provider in the provider manager
+  if (sidePanelProviderManager) {
+    try {
+      await sidePanelProviderManager.setProvider(preferredProvider);
+      // Force set activeProvider to ensure it's set
+      sidePanelProviderManager.activeProvider = preferredProvider;
+      console.log(`✅ Provider manager initialized with: ${preferredProvider}`);
+      console.log(`✅ Active provider confirmed: ${sidePanelProviderManager.getActiveProvider()}`);
+    } catch (error) {
+      console.error('Error setting initial provider:', error);
+    }
+  }
+  
   // Check provider availability
   await updateProviderStatus();
   
@@ -408,6 +421,9 @@ async function initializeProviderSettings() {
 async function handleProviderChange(event) {
   const provider = event.target.value;
   
+  // Reload API key to ensure we have the latest value
+  await loadApiKey();
+  
   // Check if Cloud AI is selected but API key is not configured
   if (provider === 'cloud' && !apiKey) {
     alert('⚠️ Cloud AI requires a Gemini API key.\n\nPlease configure your API key in Settings first, or use Built-in AI which works without an API key.');
@@ -424,11 +440,17 @@ async function handleProviderChange(event) {
   // Save preference (for backward compatibility)
   await chrome.storage.local.set({ preferredProvider: provider });
   
-  // Update sidepanel provider manager
+  // Update sidepanel provider manager - force reload settings and set provider
   if (sidePanelProviderManager) {
     try {
+      // Reload settings from storage first
+      await sidePanelProviderManager.loadSettings();
+      // Then set the provider
       await sidePanelProviderManager.setProvider(provider);
+      // Force set activeProvider to ensure it's updated
+      sidePanelProviderManager.activeProvider = provider;
       console.log(`✅ Sidepanel Provider Manager updated to: ${provider}`);
+      console.log(`✅ Active provider confirmed: ${sidePanelProviderManager.getActiveProvider()}`);
     } catch (error) {
       console.error('Error updating sidepanel provider manager:', error);
     }
@@ -436,7 +458,7 @@ async function handleProviderChange(event) {
   
   // Also update background provider manager via message
   try {
-    chrome.runtime.sendMessage({
+    await chrome.runtime.sendMessage({
       action: 'setProvider',
       provider: provider
     });
@@ -757,6 +779,10 @@ async function saveApiKey() {
         await cloudProvider.setAPIKey(key);
         console.log('✅ Sidepanel: Cloud provider reinitialized with new API key');
       }
+      
+      // Reload provider manager settings to ensure it's in sync
+      await sidePanelProviderManager.loadSettings();
+      console.log('✅ Sidepanel: Provider manager settings reloaded');
     }
     
     // Also update background provider manager
@@ -2465,6 +2491,9 @@ async function sendChatMessage() {
   const manager = await initializeSidePanelProviderManager();
   const activeProvider = manager.getActiveProvider();
   
+  // Reload API key from storage to ensure we have the latest value
+  await loadApiKey();
+  
   if (activeProvider === 'cloud' && !apiKey) {
     alert('Please configure your API key first!');
     return;
@@ -3520,19 +3549,28 @@ let mindyTimerStart = null;
 let mindyTimerInterval = null;
 
 async function startMindyCall() {
-  // Mindy requires cloud AI for voice input and streaming
-  const manager = await initializeSidePanelProviderManager();
-  const activeProvider = manager.getActiveProvider();
+  // Reload API key from storage to ensure we have the latest value
+  await loadApiKey();
   
-  if (activeProvider !== 'cloud') {
-    alert('Call Mindy requires Cloud AI. Please switch to Cloud AI in Settings to use this feature.');
+  // Mindy requires Cloud API with an API key
+  if (!apiKey) {
+    alert('Call Mindy requires a Gemini API key.\n\nPlease configure your API key in Settings first.');
+    switchTab('settings');
     return;
   }
   
-  if (!apiKey) {
-    alert('Please configure your Gemini API key first in Settings.');
-    switchTab('settings');
-    return;
+  // Mindy always uses Cloud AI (regardless of the selected provider in settings)
+  // Initialize provider manager and ensure it's ready
+  const manager = await initializeSidePanelProviderManager();
+  
+  // Temporarily switch to cloud provider for this call (without changing user's preference)
+  const originalProvider = manager.getActiveProvider();
+  try {
+    // Force cloud provider for Mindy
+    manager.activeProvider = 'cloud';
+    console.log('✅ Mindy: Using Cloud AI provider');
+  } catch (error) {
+    console.error('Error setting cloud provider for Mindy:', error);
   }
 
   // Check if microphone permission was previously granted
