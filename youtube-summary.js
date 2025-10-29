@@ -417,15 +417,27 @@ class YouTubeSummary {
       // Wait for panel to open
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      // Check if we need to click a Transcript tab inside the panel
-      // (This happens when Chapters panel opens first)
+      // WORKAROUND: Click Chapters then Transcript to force proper loading
+      // This fixes the "loading transcript" stuck issue
+      const chaptersTab = Array.from(document.querySelectorAll('button')).find(btn => {
+        const text = (btn.textContent || '').toLowerCase().trim();
+        return text === 'chapters' && btn.closest('ytd-engagement-panel-section-list-renderer');
+      });
+
+      if (chaptersTab) {
+        console.log('🔄 Clicking Chapters tab to force refresh...');
+        chaptersTab.click();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Now click Transcript tab to load the actual transcript
       const transcriptTab = Array.from(document.querySelectorAll('button')).find(btn => {
         const text = (btn.textContent || '').toLowerCase().trim();
         return text === 'transcript' && btn.closest('ytd-engagement-panel-section-list-renderer');
       });
 
       if (transcriptTab) {
-        console.log('✅ Found Transcript tab inside panel, clicking...');
+        console.log('✅ Clicking Transcript tab to load content...');
         transcriptTab.click();
         await new Promise(resolve => setTimeout(resolve, 800));
       }
