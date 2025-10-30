@@ -3950,9 +3950,21 @@ function handleMindyMessage(message) {
 
     // Handle interruption - clear audio queue immediately
     if (serverContent.interrupted) {
-      console.log('⚠️ Interrupted - clearing audio queue');
+      console.log('⚠️ Interrupted - clearing audio queue and stopping playback');
       mindyAudioQueue = [];  // Clear audio queue
       mindyIsPlayingAudio = false;
+      
+      // Stop currently playing audio immediately
+      if (mindyCurrentAudioSource) {
+        try {
+          mindyCurrentAudioSource.stop();
+          mindyCurrentAudioSource.disconnect();
+        } catch (e) {
+          // Audio source may already be stopped
+        }
+        mindyCurrentAudioSource = null;
+      }
+      
       currentAITranscript = '';  // Clear AI transcript
       updateMindyStatus('listening');
       return;  // Skip processing rest of message
@@ -4037,6 +4049,7 @@ function handleMindyMessage(message) {
 // Audio queue to prevent overlapping
 let mindyAudioQueue = [];
 let mindyIsPlayingAudio = false;
+let mindyCurrentAudioSource = null;  // Track current playing audio source for interruption
 
 async function playMindyAudio(base64Data) {
   // Add to queue
@@ -4080,9 +4093,13 @@ async function playNextAudioChunk() {
     const source = mindyAudioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(mindyAudioContext.destination);
+    
+    // Track current audio source for interruption
+    mindyCurrentAudioSource = source;
 
     // Play next chunk when this one ends
     source.onended = () => {
+      mindyCurrentAudioSource = null;
       playNextAudioChunk();
     };
 
@@ -4140,9 +4157,20 @@ function endMindyCall() {
     mindyAudioContext = null;
   }
 
-  // Clear audio queue
+  // Clear audio queue and stop current playback
   mindyAudioQueue = [];
   mindyIsPlayingAudio = false;
+  
+  // Stop currently playing audio
+  if (mindyCurrentAudioSource) {
+    try {
+      mindyCurrentAudioSource.stop();
+      mindyCurrentAudioSource.disconnect();
+    } catch (e) {
+      // Audio source may already be stopped
+    }
+    mindyCurrentAudioSource = null;
+  }
 
   // Clear transcript accumulators
   currentUserTranscript = '';
