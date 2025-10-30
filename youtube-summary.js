@@ -729,7 +729,9 @@ class YouTubeSummary {
   }
 
   async generateSummary(action) {
-    const MAX_CHUNK_SIZE = 26000; // Increased for better performance - fits most videos in one chunk
+    // Reserve space for prompt instructions (~200 chars) to prevent QuotaExceededError
+    const MAX_TRANSCRIPT_SIZE = 25500; // Safe limit accounting for prompt overhead
+    const MAX_CHUNK_SIZE = 25500; // Keep consistent with transcript size
 
     console.log('📊 Summary generation:', {
       provider: this.preferredProvider,
@@ -739,17 +741,17 @@ class YouTubeSummary {
 
     // ALWAYS use chunking for Built-in AI with long transcripts
     // This prevents QuotaExceededError even if Cloud API key exists
-    const needsChunking = this.preferredProvider === 'builtin' && this.transcript.length > MAX_CHUNK_SIZE;
+    const needsChunking = this.preferredProvider === 'builtin' && this.transcript.length > MAX_TRANSCRIPT_SIZE;
 
-    console.log(`🔍 Chunking decision: transcript=${this.transcript.length} chars, max=${MAX_CHUNK_SIZE}, needsChunking=${needsChunking}`);
+    console.log(`🔍 Chunking decision: transcript=${this.transcript.length} chars, max=${MAX_TRANSCRIPT_SIZE}, needsChunking=${needsChunking}`);
 
     if (needsChunking) {
-      console.log(`📦 Transcript is long (${this.transcript.length} chars > ${MAX_CHUNK_SIZE}), using chunked processing`);
+      console.log(`📦 Transcript is long (${this.transcript.length} chars > ${MAX_TRANSCRIPT_SIZE}), using chunked processing`);
       return await this.generateSummaryChunked(action);
     }
 
     // For Cloud API or short transcripts, process normally
-    console.log(`📝 Processing full transcript (${this.transcript.length} chars ≤ ${MAX_CHUNK_SIZE}) in single request`);
+    console.log(`📝 Processing full transcript (${this.transcript.length} chars ≤ ${MAX_TRANSCRIPT_SIZE}) in single request`);
 
     const prompts = {
       tldr: `Create a concise TLDR summary of this video transcript with 3-5 bullet points highlighting the most important information. Make it quick to read and understand.\n\nTranscript:\n${this.transcript}`,
@@ -824,7 +826,7 @@ class YouTubeSummary {
   }
 
   async generateSummaryChunked(action) {
-    const MAX_CHUNK_SIZE = 26000; // Match the size from generateSummary
+    const MAX_CHUNK_SIZE = 25500; // Safe limit accounting for prompt overhead
     const chunks = [];
 
     // Split transcript into chunks

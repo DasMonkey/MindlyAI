@@ -15,7 +15,7 @@ async function initializeSidePanelProviderManager() {
       const result = await chrome.storage.local.get(['preferredProvider']);
       const preferredProvider = result.preferredProvider || 'builtin';
       const currentProvider = sidePanelProviderManager.getActiveProvider();
-      
+
       // Only update if provider has changed
       if (currentProvider !== preferredProvider) {
         console.log(`🔄 Refreshing provider from ${currentProvider} to ${preferredProvider}`);
@@ -27,36 +27,36 @@ async function initializeSidePanelProviderManager() {
     }
     return sidePanelProviderManager;
   }
-  
+
   try {
     // Create provider instances
     const builtinProvider = new BuiltInAIProvider();
     const cloudProvider = new CloudAIProvider();
-    
+
     // Initialize providers
     await builtinProvider.initialize();
     await cloudProvider.initialize();
-    
+
     // Create and initialize manager
     sidePanelProviderManager = new AIProviderManager();
     await sidePanelProviderManager.initialize();
-    
+
     // Register providers
     sidePanelProviderManager.registerProvider('builtin', builtinProvider);
     sidePanelProviderManager.registerProvider('cloud', cloudProvider);
-    
+
     // Load saved provider preference and set it
     const result = await chrome.storage.local.get(['preferredProvider']);
     const preferredProvider = result.preferredProvider || 'builtin';
-    
+
     await sidePanelProviderManager.setProvider(preferredProvider);
     // Force set activeProvider to ensure it's set
     sidePanelProviderManager.activeProvider = preferredProvider;
-    
+
     console.log('✅ AI Provider Manager initialized in sidepanel');
     console.log(`✅ Active provider set to: ${preferredProvider}`);
     console.log(`✅ Active provider confirmed: ${sidePanelProviderManager.getActiveProvider()}`);
-    
+
     return sidePanelProviderManager;
   } catch (error) {
     console.error('❌ Error initializing sidepanel provider manager:', error);
@@ -236,7 +236,7 @@ function checkApiStatus() {
 function setupEventListeners() {
   // Save API Key
   document.getElementById('saveApiKey').addEventListener('click', saveApiKey);
-  
+
   // Remove API Key
   document.getElementById('removeApiKey').addEventListener('click', removeApiKey);
 
@@ -293,7 +293,7 @@ function setupEventListeners() {
   document.getElementById('mindyNewSessionBtn').addEventListener('click', startFreshMindySession);
   document.getElementById('mindyMuteBtn').addEventListener('click', toggleMindyMute);
   document.getElementById('mindyEndBtn').addEventListener('click', endMindyCall);
-  
+
   // Open Built-in AI Test Page
   const openTestPageBtn = document.getElementById('openTestPageBtn');
   if (openTestPageBtn) {
@@ -405,14 +405,14 @@ async function initializeProviderSettings() {
   // Load saved provider preference
   const result = await chrome.storage.local.get(['preferredProvider']);
   const preferredProvider = result.preferredProvider || 'builtin';
-  
+
   // Set radio button
   const radio = document.getElementById(preferredProvider === 'builtin' ? 'builtinRadio' : 'cloudRadio');
   if (radio) {
     radio.checked = true;
     updateProviderSelection(preferredProvider);
   }
-  
+
   // IMPORTANT: Set the active provider in the provider manager
   if (sidePanelProviderManager) {
     try {
@@ -425,20 +425,20 @@ async function initializeProviderSettings() {
       console.error('Error setting initial provider:', error);
     }
   }
-  
+
   // Check provider availability
   await updateProviderStatus();
-  
+
   // Setup event listeners
   document.getElementById('builtinRadio')?.addEventListener('change', handleProviderChange);
   document.getElementById('cloudRadio')?.addEventListener('change', handleProviderChange);
-  
+
   // Make provider options clickable
   document.getElementById('builtinProvider')?.addEventListener('click', () => {
     document.getElementById('builtinRadio').checked = true;
     handleProviderChange({ target: document.getElementById('builtinRadio') });
   });
-  
+
   document.getElementById('cloudProvider')?.addEventListener('click', () => {
     document.getElementById('cloudRadio').checked = true;
     handleProviderChange({ target: document.getElementById('cloudRadio') });
@@ -448,14 +448,14 @@ async function initializeProviderSettings() {
 // Handle provider selection change
 async function handleProviderChange(event) {
   const provider = event.target.value;
-  
+
   // Reload API key to ensure we have the latest value
   await loadApiKey();
-  
+
   // Check if Cloud AI is selected but API key is not configured
   if (provider === 'cloud' && !apiKey) {
     alert('⚠️ Cloud AI requires a Gemini API key.\n\nPlease configure your API key in Settings first, or use Built-in AI which works without an API key.');
-    
+
     // Revert to Built-in AI
     const builtinRadio = document.getElementById('builtinRadio');
     if (builtinRadio) {
@@ -464,10 +464,10 @@ async function handleProviderChange(event) {
     }
     return;
   }
-  
+
   // Save preference (for backward compatibility)
   await chrome.storage.local.set({ preferredProvider: provider });
-  
+
   // Update sidepanel provider manager - force reload settings and set provider
   if (sidePanelProviderManager) {
     try {
@@ -483,7 +483,7 @@ async function handleProviderChange(event) {
       console.error('Error updating sidepanel provider manager:', error);
     }
   }
-  
+
   // Also update background provider manager via message
   try {
     await chrome.runtime.sendMessage({
@@ -493,13 +493,13 @@ async function handleProviderChange(event) {
   } catch (error) {
     console.warn('Could not update background provider:', error);
   }
-  
+
   // Update UI
   updateProviderSelection(provider);
-  
+
   // Refresh content scripts to sync state
   await refreshContentScripts();
-  
+
   console.log(`✅ Provider switched to: ${provider}`);
 }
 
@@ -515,11 +515,11 @@ async function refreshContentScripts() {
   try {
     // Get all tabs
     const tabs = await chrome.tabs.query({});
-    
+
     // Send refresh message to all content scripts
     for (const tab of tabs) {
       try {
-        await chrome.tabs.sendMessage(tab.id, { 
+        await chrome.tabs.sendMessage(tab.id, {
           action: 'refreshProviderState',
           apiKey: apiKey,
           provider: sidePanelProviderManager?.getActiveProvider() || 'builtin'
@@ -529,7 +529,7 @@ async function refreshContentScripts() {
         console.log(`Could not refresh tab ${tab.id}:`, error.message);
       }
     }
-    
+
     console.log('✅ Content scripts refreshed');
   } catch (error) {
     console.error('❌ Error refreshing content scripts:', error);
@@ -539,7 +539,7 @@ async function refreshContentScripts() {
 // Update provider status indicators
 async function updateProviderStatus() {
   console.log('🔄 Updating provider status...');
-  
+
   // Check Built-in AI availability
   const builtinStatus = document.getElementById('builtinStatusInline') || document.getElementById('builtinStatusCompact');
   if (builtinStatus) {
@@ -547,7 +547,7 @@ async function updateProviderStatus() {
       if ('LanguageModel' in self) {
         const availability = await self.LanguageModel.availability({ outputLanguage: 'en' });
         console.log('📊 Built-in AI availability:', availability);
-        
+
         if (availability === 'readily' || availability === 'available') {
           builtinStatus.textContent = '✅ Ready';
           builtinStatus.className = 'provider-status-inline available';
@@ -573,14 +573,14 @@ async function updateProviderStatus() {
   } else {
     console.warn('⚠️ builtinStatusInline/builtinStatusCompact element not found');
   }
-  
+
   // Check Cloud API availability
   const cloudStatus = document.getElementById('cloudStatusInline') || document.getElementById('cloudStatusCompact');
   if (cloudStatus) {
     const result = await chrome.storage.local.get(['geminiApiKey']);
     const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
     console.log('📊 Cloud API key configured:', hasApiKey);
-    
+
     if (hasApiKey) {
       cloudStatus.textContent = '✅ Configured';
       cloudStatus.className = 'provider-status-inline available';
@@ -591,9 +591,9 @@ async function updateProviderStatus() {
   } else {
     console.warn('⚠️ cloudStatusInline/cloudStatusCompact element not found');
   }
-  
+
   console.log('✅ Provider status updated');
-  
+
   // Update dashboard if present
   await updateProviderDashboard();
 }
@@ -603,10 +603,10 @@ async function updateProviderDashboard() {
   try {
     // Update Built-in AI dashboard
     await updateBuiltinAIDashboard();
-    
+
     // Update Cloud API dashboard
     await updateCloudAPIDashboard();
-    
+
     console.log('✅ Provider dashboard updated');
   } catch (error) {
     console.error('❌ Error updating provider dashboard:', error);
@@ -623,18 +623,18 @@ async function updateBuiltinAIDashboard() {
     { name: 'Writer', id: 'builtinWriterStatus', check: 'Writer' },
     { name: 'Prompt', id: 'builtinPromptStatus', check: 'LanguageModel' }
   ];
-  
+
   let availableCount = 0;
-  
+
   for (const api of apis) {
     const element = document.getElementById(api.id);
     if (!element) continue;
-    
+
     try {
       // Check if the API exists in global scope
       if (api.check in self) {
         let availability;
-        
+
         // Translator API requires language parameters
         if (api.check === 'Translator') {
           availability = await self.Translator.availability({
@@ -649,7 +649,7 @@ async function updateBuiltinAIDashboard() {
         } else {
           availability = await self[api.check].availability();
         }
-        
+
         if (availability === 'readily' || availability === 'available') {
           element.innerHTML = '<span class="status-value available">✅ Available</span>';
           availableCount++;
@@ -672,7 +672,7 @@ async function updateBuiltinAIDashboard() {
       element.innerHTML = '<span class="status-value unavailable">❌ Check failed</span>';
     }
   }
-  
+
   // Update overall status
   const overallStatus = document.getElementById('builtinOverallStatus');
   if (overallStatus) {
@@ -689,16 +689,16 @@ async function updateBuiltinAIDashboard() {
 // Download API Model from dashboard
 async function downloadAPIModel(apiName, displayName) {
   console.log(`📥 Starting download for ${displayName}...`);
-  
+
   const statusElement = document.getElementById(`builtin${displayName}Status`);
   if (!statusElement) return;
-  
+
   // Show downloading status
   statusElement.innerHTML = '<span class="status-value downloading">⏳ Downloading...</span>';
-  
+
   try {
     let session;
-    
+
     if (apiName === 'Translator') {
       // Translator needs language parameters
       session = await self.Translator.create({
@@ -743,18 +743,18 @@ async function downloadAPIModel(apiName, displayName) {
         }
       });
     }
-    
+
     // Success
     statusElement.innerHTML = '<span class="status-value available">✅ Available</span>';
     console.log(`✅ ${displayName} downloaded successfully`);
-    
+
     // Refresh the entire dashboard after a short delay
     setTimeout(() => updateProviderDashboard(), 500);
-    
+
   } catch (error) {
     console.error(`❌ Error downloading ${displayName}:`, error);
     statusElement.innerHTML = '<span class="status-value unavailable">❌ Download failed</span>';
-    
+
     // Revert to downloadable after 2 seconds
     setTimeout(() => updateProviderDashboard(), 2000);
   }
@@ -764,22 +764,22 @@ async function downloadAPIModel(apiName, displayName) {
 async function updateCloudAPIDashboard() {
   const apiKeyStatus = document.getElementById('cloudApiKeyStatus');
   const connectionStatus = document.getElementById('cloudConnectionStatus');
-  
+
   if (apiKeyStatus) {
     const result = await chrome.storage.local.get(['geminiApiKey']);
     const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
-    
+
     if (hasApiKey) {
       apiKeyStatus.innerHTML = '<span class="status-value available">✅ Configured</span>';
     } else {
       apiKeyStatus.innerHTML = '<span class="status-value unavailable">❌ Not configured</span>';
     }
   }
-  
+
   if (connectionStatus) {
     const result = await chrome.storage.local.get(['geminiApiKey']);
     const hasApiKey = result.geminiApiKey && result.geminiApiKey.trim() !== '';
-    
+
     if (hasApiKey) {
       connectionStatus.innerHTML = '<span class="status-value available">✅ Ready</span>';
     } else {
@@ -799,7 +799,7 @@ async function saveApiKey() {
   chrome.storage.local.set({ geminiApiKey: key }, async () => {
     apiKey = key;
     checkApiStatus();
-    
+
     // Reinitialize cloud provider with new API key in sidepanel
     if (sidePanelProviderManager) {
       const cloudProvider = sidePanelProviderManager.providers.get('cloud');
@@ -807,12 +807,12 @@ async function saveApiKey() {
         await cloudProvider.setAPIKey(key);
         console.log('✅ Sidepanel: Cloud provider reinitialized with new API key');
       }
-      
+
       // Reload provider manager settings to ensure it's in sync
       await sidePanelProviderManager.loadSettings();
       console.log('✅ Sidepanel: Provider manager settings reloaded');
     }
-    
+
     // Also update background provider manager
     try {
       await chrome.runtime.sendMessage({
@@ -823,16 +823,16 @@ async function saveApiKey() {
     } catch (error) {
       console.warn('Could not update background provider:', error);
     }
-    
+
     // Update provider status after saving key
     await updateProviderStatus();
-    
+
     // Refresh content scripts to sync state
     await refreshContentScripts();
-    
+
     // Show remove button
     document.getElementById('removeApiKey').style.display = 'inline-block';
-    
+
     alert('API Key saved successfully!');
   });
 }
@@ -847,7 +847,7 @@ async function removeApiKey() {
     apiKey = null;
     document.getElementById('apiKey').value = '';
     checkApiStatus();
-    
+
     // Reinitialize cloud provider with null API key in sidepanel
     if (sidePanelProviderManager) {
       const cloudProvider = sidePanelProviderManager.providers.get('cloud');
@@ -856,7 +856,7 @@ async function removeApiKey() {
         console.log('✅ Sidepanel: Cloud provider reinitialized with no API key');
       }
     }
-    
+
     // Also update background provider manager
     try {
       await chrome.runtime.sendMessage({
@@ -867,16 +867,16 @@ async function removeApiKey() {
     } catch (error) {
       console.warn('Could not update background provider:', error);
     }
-    
+
     // Update provider status after removing key
     await updateProviderStatus();
-    
+
     // Refresh content scripts to sync state
     await refreshContentScripts();
-    
+
     // Hide remove button
     document.getElementById('removeApiKey').style.display = 'none';
-    
+
     alert('API Key removed successfully!');
   });
 }
@@ -1067,9 +1067,9 @@ async function switchTab(tabName) {
           updatePDFStatusBanner();
         } else {
           // Check if this is a NEW PDF (different from the stored one)
-          const isNewPDF = !pdfMode.currentTab || 
-                          pdfMode.currentTab.id !== tab.id || 
-                          pdfMode.currentTab.url !== tab.url;
+          const isNewPDF = !pdfMode.currentTab ||
+            pdfMode.currentTab.id !== tab.id ||
+            pdfMode.currentTab.url !== tab.url;
 
           if (isNewPDF) {
             // New PDF detected - reset captured pages to start fresh
@@ -1133,11 +1133,11 @@ async function generateContent(task) {
     if (task.task === 'summarize' && activeProvider === 'builtin') {
       try {
         console.log('📄 Using Built-in AI Summarizer API');
-        
+
         // Built-in Summarizer has input limits (~4000 tokens / ~16000 chars)
         // For large content, chunk it or use prompt-based approach
         const MAX_SUMMARIZER_LENGTH = 15000;
-        
+
         if (task.content.length > MAX_SUMMARIZER_LENGTH) {
           console.warn(`⚠️ Content too large (${task.content.length} chars), using prompt-based approach`);
           // Use prompt-based for large content
@@ -1175,10 +1175,10 @@ async function generateContent(task) {
     clearTimeout(timeoutId); // Clear timeout on error
     console.error('Error generating content:', error);
     console.error('Error stack:', error.stack);
-    
+
     // Provide helpful error messages
     let errorMessage = error.message || 'Unknown error occurred';
-    
+
     if (errorMessage.includes('Both providers are unavailable')) {
       errorMessage = '❌ Both AI providers are unavailable.\n\n' +
         '• Built-in AI: May not be ready or content is too large\n' +
@@ -1191,7 +1191,7 @@ async function generateContent(task) {
     } else if (errorMessage.includes('User activation required')) {
       errorMessage = '❌ User interaction required. Please click the button again.';
     }
-    
+
     showResult(errorMessage, 'error');
   }
 
@@ -1237,17 +1237,17 @@ async function callGeminiApi(prompt, imageParts = null) {
   if (imageParts && imageParts.length > 0) {
     return await callGeminiApiLegacy(prompt, imageParts);
   }
-  
+
   // For text-only requests, use provider manager
   try {
     const manager = await initializeSidePanelProviderManager();
-    
+
     console.log('📤 Calling AI Provider Manager with prompt length:', prompt.length);
-    
+
     const response = await manager.generateContent(prompt);
-    
+
     console.log('✅ Response received from', response.provider);
-    
+
     return response.data;
   } catch (error) {
     console.error('❌ AI Provider error:', error);
@@ -1413,7 +1413,7 @@ function getCurrentProvider() {
 // Smart PDF extraction - chooses method based on AI provider
 async function extractPDFPage(tabId, pageNumber = null) {
   const provider = getCurrentProvider();
-  
+
   // Built-in AI: try text extraction first, fall back to OCR if needed
   if (provider === 'builtin') {
     try {
@@ -1430,7 +1430,7 @@ async function extractPDFPage(tabId, pageNumber = null) {
           '2. Open the PDF in a different viewer (Firefox PDF.js)\n\n' +
           'Would you like to switch to Cloud AI now?'
         );
-        
+
         if (userWantsOCR) {
           // Switch to cloud AI
           await switchProvider('cloud');
@@ -1440,7 +1440,7 @@ async function extractPDFPage(tabId, pageNumber = null) {
       throw error;
     }
   }
-  
+
   // Cloud AI: use OCR for better accuracy with images
   return await extractPDFPageWithOCR(tabId, pageNumber);
 }
@@ -1493,13 +1493,13 @@ async function extractPDFPageText(tabId, pageNumber = null) {
     const extractedText = textResults?.text || '';
 
     // Check if extraction failed or returned empty/invalid text
-    if (!extractedText || 
-        extractedText === 'No text could be extracted from PDF' ||
-        extractedText.length < 10) {
-      
+    if (!extractedText ||
+      extractedText === 'No text could be extracted from PDF' ||
+      extractedText.length < 10) {
+
       console.warn('⚠️ Text extraction failed or returned minimal text');
       console.log('💡 Chrome native PDF viewer detected - switching to OCR fallback');
-      
+
       // Automatically fall back to OCR for Chrome's native viewer
       return await extractPDFPageWithOCR(tabId, pageNumber);
     }
@@ -1520,17 +1520,17 @@ async function extractPDFPageText(tabId, pageNumber = null) {
       'Bookmark',
       'Open Dashboard'
     ];
-    
+
     let cleanedText = extractedText;
     for (const menuText of menuTexts) {
       // Remove menu text and surrounding whitespace
       const regex = new RegExp(`\\s*${menuText}\\s*`, 'gi');
       cleanedText = cleanedText.replace(regex, ' ');
     }
-    
+
     // Clean up multiple spaces
     cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
-    
+
     console.log('🧹 Cleaned text, length:', cleanedText.length);
 
     // Apply context limit safeguards
@@ -1569,7 +1569,7 @@ async function extractPDFPageText(tabId, pageNumber = null) {
   } catch (error) {
     console.error('❌ PDF text extraction error:', error);
     console.log('🔄 Falling back to OCR...');
-    
+
     // Restore popup before falling back
     try {
       await chrome.scripting.executeScript({
@@ -1584,7 +1584,7 @@ async function extractPDFPageText(tabId, pageNumber = null) {
     } catch (e) {
       console.log('Could not restore popup:', e);
     }
-    
+
     // Fall back to OCR if text extraction fails
     try {
       return await extractPDFPageWithOCR(tabId, pageNumber);
@@ -2204,7 +2204,7 @@ async function organizeBookmarks() {
   // Check if API key is needed (only for cloud AI)
   const manager = await initializeSidePanelProviderManager();
   const activeProvider = manager.getActiveProvider();
-  
+
   if (activeProvider === 'cloud' && !apiKey) {
     alert('Please configure your API key first!');
     return;
@@ -2363,10 +2363,10 @@ async function loadPageContent() {
         pageContent = 'Unable to load page content. The content script may not be loaded on this page. Try refreshing the page.';
         resolve();
       }, 5000);
-      
+
       chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' }, (response) => {
         clearTimeout(timeout);
-        
+
         if (chrome.runtime.lastError) {
           console.log('❌ Error loading page content:', chrome.runtime.lastError.message);
           pageContent = 'Unable to load page content. The content script may not be loaded on this page. Try refreshing the page.';
@@ -2395,7 +2395,7 @@ async function loadPageContent() {
 async function checkForTabChange() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tabs[0]) return;
-  
+
   const newTabId = tabs[0].id;
   const newUrl = tabs[0].url;
 
@@ -2419,7 +2419,7 @@ async function checkForTabChange() {
 
   // Get the currently active sidepanel tab
   const currentTab = document.querySelector('.tab.active')?.dataset.tab;
-  
+
   // Determine which button to show based on active sidepanel tab
   let refreshBtn = null;
   if (currentTab === 'chat') {
@@ -2430,7 +2430,7 @@ async function checkForTabChange() {
 
   // Check if this is a different tab or URL from the session tab
   const isDifferentFromSession = (chatSessionTab.id !== newTabId || chatSessionTab.url !== newUrl);
-  
+
   if (isDifferentFromSession) {
     // Different page from session - show button
     if (refreshBtn) {
@@ -2453,7 +2453,7 @@ async function checkForTabChange() {
 // Start fresh chat session with new page
 async function startFreshChatSession() {
   console.log('🔄 Starting fresh chat session...');
-  
+
   // Clear chat messages except welcome message
   const chatMessages = document.getElementById('chatMessages');
   chatMessages.innerHTML = `
@@ -2494,7 +2494,7 @@ async function startFreshChatSession() {
 
   // Load new page content from the current tab
   await loadPageContent();
-  
+
   // Verify content was loaded
   if (pageContent) {
     console.log('✅ Page content loaded successfully, length:', pageContent.length);
@@ -2515,7 +2515,7 @@ async function startFreshChatSession() {
 // Start fresh Mindy session with new page
 async function startFreshMindySession() {
   console.log('🔄 Starting fresh Mindy session...');
-  
+
   // Clear Mindy transcript
   const mindyTranscript = document.getElementById('mindyTranscriptPanel');
   mindyTranscript.innerHTML = `
@@ -2568,10 +2568,10 @@ async function sendChatMessage() {
   // Check if API key is needed (only for cloud AI)
   const manager = await initializeSidePanelProviderManager();
   const activeProvider = manager.getActiveProvider();
-  
+
   // Reload API key from storage to ensure we have the latest value
   await loadApiKey();
-  
+
   if (activeProvider === 'cloud' && !apiKey) {
     alert('Please configure your API key first!');
     return;
@@ -2601,7 +2601,7 @@ async function sendChatMessage() {
       if (tabs[0]) {
         const currentTabId = tabs[0].id;
         const currentUrl = tabs[0].url;
-        
+
         // Initialize chat session ONLY when user sends first message
         if (!chatSessionTab.id) {
           chatSessionTab.id = currentTabId;
@@ -2610,7 +2610,7 @@ async function sendChatMessage() {
           currentPageTab.url = currentUrl;
           console.log('🎯 Chat session initialized on first message with tab:', currentTabId, currentUrl);
         }
-        
+
         // Check if user is on a different tab than the session
         if (chatSessionTab.id !== currentTabId || chatSessionTab.url !== currentUrl) {
           console.warn('⚠️ User is asking about a different tab! Session:', chatSessionTab.id, 'Current:', currentTabId);
@@ -2649,7 +2649,7 @@ ${pageContent ? pageContent.substring(0, 3000) : 'No page content available.'}
 User question: ${message}
 
 Please provide a helpful and accurate answer based on the page content above.${pdfInstructions}`;
-      
+
       // Debug logging
       console.log('📤 Sending prompt with page content length:', pageContent?.length || 0);
       console.log('📄 Page content preview:', pageContent ? pageContent.substring(0, 200) : 'null');
@@ -2790,7 +2790,7 @@ async function translateAndReplace(content, tabId, htmlContent) {
 
     // Get AI Provider Manager
     const manager = await initializeSidePanelProviderManager();
-    
+
     // Check which provider is active
     const activeProvider = manager.getActiveProvider();
     let translatedText;
@@ -2800,11 +2800,11 @@ async function translateAndReplace(content, tabId, htmlContent) {
       try {
         // Detect source language (assume English for now, could use Language Detector API)
         const sourceLang = 'en';
-        
+
         // Use Built-in Translator API for direct translation
         const response = await manager.translateText(contentToTranslate, sourceLang, targetLang);
         translatedText = response.data;
-        
+
         console.log(`✅ Translated using Built-in AI Translator API (${sourceLang} → ${targetLang})`);
       } catch (error) {
         console.warn('⚠️ Built-in Translator failed, falling back to prompt-based translation:', error);
@@ -2812,7 +2812,7 @@ async function translateAndReplace(content, tabId, htmlContent) {
         const prompt = isHTML
           ? `Translate the following HTML content to ${langName}. Preserve all HTML tags exactly. Only translate text content:\n\n${contentToTranslate}`
           : `Translate the following text to ${langName}. Preserve formatting:\n\n${contentToTranslate}`;
-        
+
         const response = await manager.generateContent(prompt);
         translatedText = response.data;
       }
@@ -2821,10 +2821,10 @@ async function translateAndReplace(content, tabId, htmlContent) {
       const prompt = isHTML
         ? `Translate the following HTML content to ${langName}. Preserve all HTML tags (<br>, <p>, <div>, etc.) exactly as they are. Only translate the text content inside the tags. Return valid HTML:\n\n${contentToTranslate}`
         : `Translate the following text to ${langName}. Preserve all line breaks and paragraph structure. Only return the translated text:\n\n${contentToTranslate}`;
-      
+
       const response = await manager.generateContent(prompt);
       translatedText = response.data;
-      
+
       console.log(`✅ Translated using Cloud AI (${activeProvider})`);
     }
 
@@ -2855,7 +2855,7 @@ async function translatePageInPlace(content, tabId) {
     // Get AI Provider Manager
     const manager = await initializeSidePanelProviderManager();
     const activeProvider = manager.getActiveProvider();
-    
+
     let translatedText;
 
     // For page translation, we need to use prompt-based approach for both providers
@@ -2872,7 +2872,7 @@ ${content}`;
 
     const response = await manager.generateContent(prompt);
     translatedText = response.data;
-    
+
     console.log(`✅ Page translated using ${activeProvider === 'builtin' ? 'Built-in AI' : 'Cloud AI'}`)
     console.log('Translation received, length:', translatedText.length);
 
@@ -2900,7 +2900,7 @@ async function translateAndInject(content, tabId) {
     // Get AI Provider Manager
     const manager = await initializeSidePanelProviderManager();
     const activeProvider = manager.getActiveProvider();
-    
+
     let translatedText;
 
     // If Built-in AI and Translator API is available, use it directly
@@ -2908,11 +2908,11 @@ async function translateAndInject(content, tabId) {
       try {
         // Detect source language (assume English for now)
         const sourceLang = 'en';
-        
+
         // Use Built-in Translator API
         const response = await manager.translateText(content, sourceLang, targetLang);
         translatedText = response.data;
-        
+
         console.log(`✅ Translated using Built-in AI Translator API`);
       } catch (error) {
         console.warn('⚠️ Built-in Translator failed, falling back to prompt-based:', error);
@@ -2926,7 +2926,7 @@ async function translateAndInject(content, tabId) {
       const prompt = `Translate the following text to ${langName}. Maintain the structure and formatting:\n\n${content}`;
       const response = await manager.generateContent(prompt);
       translatedText = response.data;
-      
+
       console.log(`✅ Translated using Cloud AI`);
     }
 
@@ -3117,12 +3117,12 @@ async function generateTextToSpeech(content) {
   // TTS requires cloud AI (uses Gemini TTS model)
   const manager = await initializeSidePanelProviderManager();
   const activeProvider = manager.getActiveProvider();
-  
+
   if (activeProvider !== 'cloud') {
     alert('Text-to-Speech requires Cloud AI. Please switch to Cloud AI in Settings.');
     return;
   }
-  
+
   if (!apiKey) {
     alert('Please configure your API key first in Settings!');
     return;
@@ -3477,16 +3477,16 @@ async function explainImage(imageUrl) {
   // Image explanation requires cloud AI (multimodal support)
   const manager = await initializeSidePanelProviderManager();
   const activeProvider = manager.getActiveProvider();
-  
+
   if (activeProvider !== 'cloud') {
     showResult('⚠️ Image explanation requires Cloud AI. Please switch to Cloud AI in Settings.', 'error');
     return;
   }
-  
+
   // Refresh API key from storage to ensure we have the latest value
   const result = await chrome.storage.local.get(['geminiApiKey']);
   apiKey = result.geminiApiKey || null;
-  
+
   if (!apiKey) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
@@ -3564,16 +3564,16 @@ async function extractImageText(imageUrl) {
   // Image text extraction requires cloud AI (multimodal support)
   const manager = await initializeSidePanelProviderManager();
   const activeProvider = manager.getActiveProvider();
-  
+
   if (activeProvider !== 'cloud') {
     showResult('⚠️ Image text extraction requires Cloud AI. Please switch to Cloud AI in Settings.', 'error');
     return;
   }
-  
+
   // Refresh API key from storage to ensure we have the latest value
   const result = await chrome.storage.local.get(['geminiApiKey']);
   apiKey = result.geminiApiKey || null;
-  
+
   if (!apiKey) {
     showResult('⚠️ Please configure your Gemini API key first!', 'error');
     return;
@@ -3663,18 +3663,18 @@ let mindyTimerInterval = null;
 async function startMindyCall() {
   // Reload API key from storage to ensure we have the latest value
   await loadApiKey();
-  
+
   // Mindy requires Cloud API with an API key
   if (!apiKey) {
     alert('Call Mindy requires a Gemini API key.\n\nPlease configure your API key in Settings first.');
     switchTab('settings');
     return;
   }
-  
+
   // Mindy always uses Cloud AI (regardless of the selected provider in settings)
   // Initialize provider manager and ensure it's ready
   const manager = await initializeSidePanelProviderManager();
-  
+
   // Temporarily switch to cloud provider for this call (without changing user's preference)
   const originalProvider = manager.getActiveProvider();
   try {
@@ -3953,7 +3953,7 @@ function handleMindyMessage(message) {
       console.log('⚠️ Interrupted - clearing audio queue and stopping playback');
       mindyAudioQueue = [];  // Clear audio queue
       mindyIsPlayingAudio = false;
-      
+
       // Stop currently playing audio immediately
       if (mindyCurrentAudioSource) {
         try {
@@ -3964,7 +3964,7 @@ function handleMindyMessage(message) {
         }
         mindyCurrentAudioSource = null;
       }
-      
+
       currentAITranscript = '';  // Clear AI transcript
       updateMindyStatus('listening');
       return;  // Skip processing rest of message
@@ -4093,7 +4093,7 @@ async function playNextAudioChunk() {
     const source = mindyAudioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(mindyAudioContext.destination);
-    
+
     // Track current audio source for interruption
     mindyCurrentAudioSource = source;
 
@@ -4160,7 +4160,7 @@ function endMindyCall() {
   // Clear audio queue and stop current playback
   mindyAudioQueue = [];
   mindyIsPlayingAudio = false;
-  
+
   // Stop currently playing audio
   if (mindyCurrentAudioSource) {
     try {
@@ -4566,7 +4566,7 @@ function showAccountMenu() {
 function showAuthDialog() {
   // For now, show a simple prompt - you can replace this with a proper modal later
   const action = confirm('Welcome to Mentelo!\n\nClick OK to Sign Up or Cancel to Login');
-  
+
   if (action) {
     // Sign up flow
     const email = prompt('Enter your email to sign up:');
@@ -4590,7 +4590,7 @@ function signupUser(email) {
     credits: 100, // Welcome bonus
     email: email
   };
-  
+
   saveUserAccount();
   updateUserAccountUI();
   alert(`Welcome! You've received 100 free credits to get started.`);
@@ -4604,7 +4604,7 @@ function loginUser(email) {
     credits: 50, // Example existing credits
     email: email
   };
-  
+
   saveUserAccount();
   updateUserAccountUI();
   alert(`Welcome back! You have ${userAccount.credits} credits.`);
@@ -4617,7 +4617,7 @@ function logoutUser() {
     credits: 0,
     email: null
   };
-  
+
   saveUserAccount();
   updateUserAccountUI();
   alert('You have been logged out.');
@@ -4637,7 +4637,7 @@ function deductCredits(amount) {
     console.log('⚠️ User not logged in, no credits deducted');
     return true;
   }
-  
+
   if (userAccount.credits >= amount) {
     userAccount.credits -= amount;
     saveUserAccount();
