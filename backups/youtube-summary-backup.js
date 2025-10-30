@@ -36,8 +36,8 @@ class YouTubeSummary {
   }
 
   isYouTubeWatchPage() {
-    return window.location.hostname.includes('youtube.com') && 
-           window.location.pathname === '/watch';
+    return window.location.hostname.includes('youtube.com') &&
+      window.location.pathname === '/watch';
   }
 
   getVideoId() {
@@ -168,50 +168,50 @@ class YouTubeSummary {
     const header = this.summaryPanel.querySelector('.yt-summary-header');
     const collapseBtn = this.summaryPanel.querySelector('.yt-summary-collapse');
     const content = this.summaryPanel.querySelector('.yt-summary-content');
-    
+
     const toggleCollapse = (e) => {
       // Prevent double-triggering if clicking the button directly
       e.stopPropagation();
-      
+
       const isCollapsed = content.style.display === 'none';
-      
+
       if (isCollapsed) {
         // Expanding
         content.style.display = 'block';
         content.style.maxHeight = '0px';
         content.style.opacity = '0';
-        
+
         // Force reflow to ensure the initial state is applied
         content.offsetHeight;
-        
+
         // Trigger animation
         content.style.maxHeight = content.scrollHeight + 'px';
         content.style.opacity = '1';
-        
+
         collapseBtn.textContent = '−';
         localStorage.setItem('yt-summary-collapsed', 'false');
       } else {
         // Collapsing - set explicit height first
         const currentHeight = content.scrollHeight;
         content.style.maxHeight = currentHeight + 'px';
-        
+
         // Force reflow to ensure the height is set before transition
         content.offsetHeight;
-        
+
         // Now trigger the collapse animation
         content.style.maxHeight = '0px';
         content.style.opacity = '0';
-        
+
         // Hide after animation completes
         setTimeout(() => {
           content.style.display = 'none';
         }, 300);
-        
+
         collapseBtn.textContent = '+';
         localStorage.setItem('yt-summary-collapsed', 'true');
       }
     };
-    
+
     // Make entire header clickable
     header.addEventListener('click', toggleCollapse);
 
@@ -253,14 +253,14 @@ class YouTubeSummary {
 
       // Generate summary based on action
       const summary = await this.generateSummary(action);
-      
+
       if (!summary) {
         throw new Error('Failed to generate summary');
       }
 
       // Display result
       this.showResult(action, summary);
-      
+
     } catch (error) {
       console.error('YouTube Summary Error:', error);
       this.showError(error.message);
@@ -272,7 +272,7 @@ class YouTubeSummary {
   async extractTranscript() {
     try {
       console.log('Starting transcript extraction...');
-      
+
       // Method 1: Extract from ytInitialPlayerResponse (most reliable)
       const ytTranscript = await this.extractFromYTInitialData();
       if (ytTranscript) {
@@ -281,7 +281,7 @@ class YouTubeSummary {
         window.youtubeTranscript = ytTranscript;
         return ytTranscript;
       }
-      
+
       // Method 2: Open and scrape YouTube's transcript panel
       const panelTranscript = await this.extractFromTranscriptPanel();
       if (panelTranscript) {
@@ -290,18 +290,18 @@ class YouTubeSummary {
         window.youtubeTranscript = panelTranscript;
         return panelTranscript;
       }
-      
+
       // Method 3: Try to get captions from YouTube's player response
       const captionTracks = await this.getCaptionTracks();
       console.log('Caption tracks found:', captionTracks);
-      
+
       if (captionTracks && captionTracks.length > 0) {
         console.log('Total tracks available:', captionTracks.length);
-        
+
         // Prefer English captions, or take the first available
         const track = captionTracks.find(t => t.languageCode === 'en' || t.languageCode?.startsWith('en')) || captionTracks[0];
         console.log('Selected track:', track);
-        
+
         if (track && track.baseUrl) {
           // Use background script to fetch (avoid CORS)
           const transcript = await this.fetchViaBackground(track.baseUrl);
@@ -333,11 +333,11 @@ class YouTubeSummary {
           if (match) {
             const data = JSON.parse(match[1]);
             const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-            
+
             if (captionTracks && captionTracks.length > 0) {
               console.log('Found captions in ytInitialPlayerResponse');
               const track = captionTracks.find(t => t.languageCode === 'en') || captionTracks[0];
-              
+
               if (track && track.baseUrl) {
                 return await this.fetchViaBackground(track.baseUrl);
               }
@@ -355,11 +355,11 @@ class YouTubeSummary {
   async extractFromTranscriptPanel() {
     try {
       console.log('Looking for transcript button...');
-      
+
       // Find the "Show transcript" button
       const buttons = document.querySelectorAll('button');
       let transcriptButton = null;
-      
+
       for (const button of buttons) {
         const ariaLabel = button.getAttribute('aria-label');
         if (ariaLabel && (ariaLabel.includes('transcript') || ariaLabel.includes('Transcript'))) {
@@ -367,51 +367,51 @@ class YouTubeSummary {
           break;
         }
       }
-      
+
       // Also try by looking for specific selectors
       if (!transcriptButton) {
         transcriptButton = document.querySelector('[aria-label*="Show transcript"]') ||
-                          document.querySelector('button[aria-label*="transcript"]');
+          document.querySelector('button[aria-label*="transcript"]');
       }
-      
+
       if (!transcriptButton) {
         console.log('Transcript button not found');
         return null;
       }
-      
+
       console.log('Found transcript button, clicking...');
       transcriptButton.click();
-      
+
       // Wait for transcript panel to load
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
       // Extract transcript from panel
       const segments = document.querySelectorAll('ytd-transcript-segment-renderer');
       console.log('Found', segments.length, 'transcript segments');
-      
+
       if (segments.length === 0) {
         console.log('No transcript segments found');
         // Close the panel
         transcriptButton.click();
         return null;
       }
-      
+
       let transcript = '';
       segments.forEach(segment => {
         const timestampEl = segment.querySelector('.segment-timestamp');
         const textEl = segment.querySelector('.segment-text');
-        
+
         if (timestampEl && textEl) {
           const timestamp = timestampEl.textContent.trim();
           const text = textEl.textContent.trim();
           transcript += `[${timestamp}] ${text}\n`;
         }
       });
-      
+
       // Close the panel
       console.log('Closing transcript panel...');
       transcriptButton.click();
-      
+
       return transcript.length > 0 ? transcript : null;
     } catch (error) {
       console.error('Error extracting from transcript panel:', error);
@@ -422,7 +422,7 @@ class YouTubeSummary {
   async fetchViaBackground(url) {
     try {
       console.log('Fetching via background script:', url);
-      
+
       return new Promise((resolve) => {
         chrome.runtime.sendMessage({
           action: 'fetchTranscript',
@@ -447,7 +447,7 @@ class YouTubeSummary {
       // Construct YouTube timedtext API URL
       const url = `https://www.youtube.com/api/timedtext?v=${this.videoId}&lang=en`;
       console.log('Trying direct API:', url);
-      
+
       const response = await fetch(url);
       if (!response.ok) {
         console.log('Direct API failed, trying with auto-generated captions');
@@ -460,7 +460,7 @@ class YouTubeSummary {
         const xmlText = await autoResponse.text();
         return this.parseTranscriptXML(xmlText);
       }
-      
+
       const xmlText = await response.text();
       return this.parseTranscriptXML(xmlText);
     } catch (error) {
@@ -474,14 +474,14 @@ class YouTubeSummary {
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
       const textNodes = xmlDoc.querySelectorAll('text');
-      
+
       if (textNodes.length === 0) {
         console.log('No text nodes found in XML');
         return null;
       }
-      
+
       console.log('Found', textNodes.length, 'text nodes');
-      
+
       let transcript = '';
       textNodes.forEach((node, index) => {
         // Get raw text content (browser automatically decodes HTML entities)
@@ -489,7 +489,7 @@ class YouTubeSummary {
           .replace(/\n/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
-        
+
         if (text) {
           const start = parseFloat(node.getAttribute('start'));
           if (!isNaN(start)) {
@@ -502,13 +502,13 @@ class YouTubeSummary {
           }
         }
       });
-      
+
       if (transcript.length > 0) {
         console.log('Transcript created, length:', transcript.length);
         console.log('First 200 chars:', transcript.substring(0, 200));
         return transcript;
       }
-      
+
       console.log('Transcript is empty after parsing');
       return null;
     } catch (error) {
@@ -530,7 +530,7 @@ class YouTubeSummary {
             /"captionTracks":(\[[^\]]+\])/,
             /captionTracks":\s*(\[.*?\}\])/s
           ];
-          
+
           for (const pattern of patterns) {
             const match = content.match(pattern);
             if (match) {
@@ -548,7 +548,7 @@ class YouTubeSummary {
           }
         }
       }
-      
+
       // Fallback: Try to find ytInitialPlayerResponse
       for (const script of scripts) {
         const content = script.textContent;
@@ -568,7 +568,7 @@ class YouTubeSummary {
           }
         }
       }
-      
+
       return null;
     } catch (error) {
       console.error('Error getting caption tracks:', error);
@@ -580,21 +580,21 @@ class YouTubeSummary {
     try {
       console.log('Fetching captions from:', baseUrl);
       const response = await fetch(baseUrl);
-      
+
       if (!response.ok) {
         console.log('Caption fetch failed with status:', response.status);
         return null;
       }
-      
+
       const xmlText = await response.text();
       console.log('XML response length:', xmlText.length);
       console.log('XML preview:', xmlText.substring(0, 200));
-      
+
       if (!xmlText || xmlText.length === 0) {
         console.log('Empty XML response');
         return null;
       }
-      
+
       // Use the shared XML parser
       return this.parseTranscriptXML(xmlText);
     } catch (error) {
@@ -626,22 +626,22 @@ class YouTubeSummary {
   async generateSummary(action) {
     const prompts = {
       tldr: `Create a concise TLDR summary of this video transcript with 3-5 bullet points highlighting the most important information. Make it quick to read and understand.\n\nTranscript:\n${this.transcript}`,
-      
+
       detailed: `Create a detailed, comprehensive summary of this video with clear sections. Include main topics discussed, key points, and important timestamps. Format with proper headings and structure.\n\nTranscript:\n${this.transcript}`,
-      
+
       concepts: `Identify and explain the key concepts, terms, and topics discussed in this video. For each concept, provide a clear, concise explanation. Format as a list with concept names in bold.\n\nTranscript:\n${this.transcript}`,
-      
+
       chapters: `Generate timestamped chapters for this video. Create 5-8 chapters that divide the content into logical sections. Format as: [timestamp] - Chapter title and brief description.\n\nTranscript:\n${this.transcript}`,
-      
+
       takeaways: `Extract the main takeaways and actionable insights from this video. List 4-6 key lessons or action items that viewers should remember. Format as numbered points.\n\nTranscript:\n${this.transcript}`,
-      
+
       notes: `Create a structured study guide or notes template from this video. Include: Overview, Main Topics (with sub-points), Key Terms, and Summary. Format for easy note-taking.\n\nTranscript:\n${this.transcript}`,
-      
+
       social: `Create 3 social media posts from this video:\n1. A Twitter/X post (280 chars max, include 2-3 hashtags)\n2. A LinkedIn post (professional tone, 2-3 paragraphs)\n3. An Instagram caption (engaging, with emojis and 5-8 hashtags)\n\nTranscript:\n${this.transcript}`
     };
 
     const prompt = prompts[action];
-    
+
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${this.apiKey}`, {
         method: 'POST',
@@ -699,11 +699,11 @@ class YouTubeSummary {
     };
 
     titleSpan.textContent = titles[action];
-    
+
     // Format the content with proper line breaks and styling
     const formattedContent = this.formatSummaryContent(summary, action);
     contentDiv.innerHTML = formattedContent;
-    
+
     // Store current summary for copying
     this.currentSummary = summary;
 
@@ -729,7 +729,7 @@ class YouTubeSummary {
 
     // Make timestamps clickable for chapters
     if (action === 'chapters') {
-      formatted = formatted.replace(/\[(\d+):(\d+)\]/g, 
+      formatted = formatted.replace(/\[(\d+):(\d+)\]/g,
         '<span class="yt-timestamp" data-time="$1:$2">[$1:$2]</span>');
     }
 
@@ -742,7 +742,7 @@ class YouTubeSummary {
       ts.style.cursor = 'pointer';
       ts.style.color = '#3ea6ff';
       ts.style.textDecoration = 'underline';
-      
+
       ts.addEventListener('click', () => {
         const time = ts.dataset.time;
         this.seekToTimestamp(time);
@@ -773,7 +773,7 @@ class YouTubeSummary {
     const errorText = this.summaryPanel.querySelector('.yt-error-text');
     errorText.textContent = message;
     errorDiv.style.display = 'flex';
-    
+
     // Auto-hide after 5 seconds
     setTimeout(() => this.hideError(), 5000);
   }
@@ -788,13 +788,13 @@ class YouTubeSummary {
 
     try {
       await navigator.clipboard.writeText(this.currentSummary);
-      
+
       // Show feedback
       const copyBtn = this.summaryPanel.querySelector('[data-action="copy"]');
       const originalText = copyBtn.textContent;
       copyBtn.textContent = '✓';
       copyBtn.style.color = '#0f0';
-      
+
       setTimeout(() => {
         copyBtn.textContent = originalText;
         copyBtn.style.color = '';
@@ -816,7 +816,7 @@ class YouTubeSummary {
           this.videoId = this.getVideoId();
           this.transcript = null;
           this.currentSummary = null;
-          
+
           // Wait and reinject panel
           setTimeout(() => {
             const secondary = document.querySelector('#secondary');

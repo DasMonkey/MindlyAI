@@ -485,9 +485,9 @@ async function switchTab(tabName) {
           updatePDFStatusBanner();
         } else {
           // Check if this is a NEW PDF (different from the stored one)
-          const isNewPDF = !pdfMode.currentTab || 
-                          pdfMode.currentTab.id !== tab.id || 
-                          pdfMode.currentTab.url !== tab.url;
+          const isNewPDF = !pdfMode.currentTab ||
+            pdfMode.currentTab.id !== tab.id ||
+            pdfMode.currentTab.url !== tab.url;
 
           if (isNewPDF) {
             // New PDF detected - reset captured pages to start fresh
@@ -3492,7 +3492,7 @@ function showAccountMenu() {
 function showAuthDialog() {
   // For now, show a simple prompt - you can replace this with a proper modal later
   const action = confirm('Welcome to Mentelo!\n\nClick OK to Sign Up or Cancel to Login');
-  
+
   if (action) {
     // Sign up flow
     const email = prompt('Enter your email to sign up:');
@@ -3516,7 +3516,7 @@ function signupUser(email) {
     credits: 100, // Welcome bonus
     email: email
   };
-  
+
   saveUserAccount();
   updateUserAccountUI();
   alert(`Welcome! You've received 100 free credits to get started.`);
@@ -3530,7 +3530,7 @@ function loginUser(email) {
     credits: 50, // Example existing credits
     email: email
   };
-  
+
   saveUserAccount();
   updateUserAccountUI();
   alert(`Welcome back! You have ${userAccount.credits} credits.`);
@@ -3543,7 +3543,7 @@ function logoutUser() {
     credits: 0,
     email: null
   };
-  
+
   saveUserAccount();
   updateUserAccountUI();
   alert('You have been logged out.');
@@ -3563,7 +3563,7 @@ function deductCredits(amount) {
     console.log('⚠️ User not logged in, no credits deducted');
     return true;
   }
-  
+
   if (userAccount.credits >= amount) {
     userAccount.credits -= amount;
     saveUserAccount();

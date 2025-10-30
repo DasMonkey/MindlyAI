@@ -3908,7 +3908,7 @@ async function startMindyCall() {
           realtimeInput: {
             mediaChunks: [{
               data: base64Audio,
-              mimeType: 'audio/pcm'
+              mimeType: 'audio/pcm;rate=16000'
             }]
           }
         }));
